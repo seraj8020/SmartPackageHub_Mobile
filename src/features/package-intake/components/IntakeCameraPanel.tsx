@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -13,6 +12,7 @@ import {
   useCameraPermissions,
   type BarcodeScanningResult,
 } from "expo-camera";
+import { Ionicons } from "@expo/vector-icons";
 import { BARCODE_TYPES } from "@/features/package-intake/constants";
 import { colors } from "@/shared/theme/colors";
 import type { RefObject } from "react";
@@ -28,7 +28,7 @@ type Props = {
   photoState: string | null;
   onBarcodeScanned: (result: BarcodeScanningResult) => void;
   onCameraReady?: () => void;
-  onRequestPermission?: () => void;
+  onStartCamera: () => void;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -43,14 +43,17 @@ export function IntakeCameraPanel({
   photoState,
   onBarcodeScanned,
   onCameraReady,
+  onStartCamera,
 }: Props) {
   const [permission, requestPermission] = useCameraPermissions();
 
-  useEffect(() => {
-    if (permission && !permission.granted && permission.canAskAgain) {
-      void requestPermission();
+  async function handleStartCamera() {
+    if (!permission?.granted) {
+      const result = await requestPermission();
+      if (!result.granted) return;
     }
-  }, [permission, requestPermission]);
+    onStartCamera();
+  }
 
   if (!permission) {
     return (
@@ -60,7 +63,7 @@ export function IntakeCameraPanel({
     );
   }
 
-  if (!permission.granted) {
+  if (!permission.granted && cameraOn) {
     return (
       <View style={styles.shell}>
         <Text style={styles.permTitle}>Camera access needed</Text>
@@ -78,36 +81,41 @@ export function IntakeCameraPanel({
     <View style={styles.wrap}>
       <View style={styles.shell}>
         {cameraOn ? (
-          <CameraView
-            key={`intake-camera-${cameraEpoch}`}
-            ref={cameraRef}
-            style={StyleSheet.absoluteFill}
-            facing="back"
-            mode="picture"
-            barcodeScannerSettings={{
-              barcodeTypes: [...BARCODE_TYPES],
-            }}
-            onCameraReady={onCameraReady}
-            onBarcodeScanned={scanningEnabled ? onBarcodeScanned : undefined}
-          />
+          <>
+            <CameraView
+              key={`intake-camera-${cameraEpoch}`}
+              ref={cameraRef}
+              style={StyleSheet.absoluteFill}
+              facing="back"
+              mode="picture"
+              barcodeScannerSettings={{
+                barcodeTypes: [...BARCODE_TYPES],
+              }}
+              onCameraReady={onCameraReady}
+              onBarcodeScanned={scanningEnabled ? onBarcodeScanned : undefined}
+            />
+            <View style={styles.reticle} pointerEvents="none" />
+            {reading ? (
+              <View style={styles.readingOverlay}>
+                <ActivityIndicator color="#fff" />
+                <Text style={styles.readingText}>Reading label…</Text>
+                <Text style={styles.readingHint}>You can still edit fields below</Text>
+              </View>
+            ) : null}
+          </>
         ) : (
           <View style={styles.stopped}>
-            <Text style={styles.stoppedText}>Camera stopped</Text>
-            <Text style={styles.stoppedHint}>Tap Clear / restart scan to open camera</Text>
-          </View>
-        )}
-        <View style={styles.reticle} pointerEvents="none" />
-        {reading && (
-          <View style={styles.readingOverlay}>
-            <ActivityIndicator color="#fff" />
-            <Text style={styles.readingText}>Reading label…</Text>
+            <Pressable style={styles.openBtn} onPress={() => void handleStartCamera()}>
+              <Ionicons name="camera-outline" size={16} color="#fff" />
+              <Text style={styles.openBtnText}>Open camera</Text>
+            </Pressable>
           </View>
         )}
       </View>
       <Text style={styles.status}>{status}</Text>
-      {confidence != null && confidence < 45 && (
+      {confidence != null && confidence < 45 ? (
         <Text style={styles.warn}>Low OCR confidence — double-check AWB and flat</Text>
-      )}
+      ) : null}
       {photoState ? <Text style={styles.meta}>{photoState}</Text> : null}
     </View>
   );
@@ -119,7 +127,7 @@ const styles = StyleSheet.create({
     height: 220,
     borderRadius: 16,
     overflow: "hidden",
-    backgroundColor: "#0F172A",
+    backgroundColor: "#0a1f35",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -128,17 +136,18 @@ const styles = StyleSheet.create({
     width: "72%",
     height: 88,
     borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.85)",
+    borderColor: "rgba(14, 165, 233, 0.6)",
     borderRadius: 12,
   },
   readingOverlay: {
-    ...StyleSheet.absoluteFill,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(15,23,42,0.45)",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
   },
   readingText: { color: "#fff", fontSize: 12, fontWeight: "600" },
+  readingHint: { color: "rgba(255,255,255,0.7)", fontSize: 11 },
   status: {
     marginTop: 8,
     fontSize: 12,
@@ -148,13 +157,16 @@ const styles = StyleSheet.create({
   warn: { marginTop: 4, fontSize: 11, color: "#B45309", fontWeight: "600" },
   meta: { marginTop: 2, fontSize: 11, color: colors.textMuted },
   stopped: { alignItems: "center", justifyContent: "center", paddingHorizontal: 20 },
-  stoppedText: { color: "rgba(255,255,255,0.7)", fontSize: 13 },
-  stoppedHint: {
-    marginTop: 6,
-    color: "rgba(255,255,255,0.45)",
-    fontSize: 11,
-    textAlign: "center",
+  openBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#0EA5E9",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
   },
+  openBtnText: { color: "#fff", fontSize: 12, fontWeight: "800" },
   permTitle: { color: "#fff", fontSize: 14, fontWeight: "700", marginBottom: 6 },
   permBody: {
     color: "rgba(255,255,255,0.7)",

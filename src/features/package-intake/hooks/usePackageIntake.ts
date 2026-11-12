@@ -199,7 +199,8 @@ export function usePackageIntake(options: {
 
   function reset() {
     requestId.current = createClientId();
-    scanner.resetScanner();
+    // Keep camera on for the next package in a bulk intake session.
+    scanner.resetScanner({ keepCamera: true });
     matching.resetMatching();
     setDetailsOpen(false);
     setCategory("");

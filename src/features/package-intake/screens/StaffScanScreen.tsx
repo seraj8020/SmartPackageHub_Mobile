@@ -186,6 +186,7 @@ function StaffScanBody({
           photoState={intake.photoState}
           onBarcodeScanned={intake.onBarcodeScanned}
           onCameraReady={intake.onCameraReady}
+          onStartCamera={intake.startCamera}
         />
 
         <IntakeLabelFields

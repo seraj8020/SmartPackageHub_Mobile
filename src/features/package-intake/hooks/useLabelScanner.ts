@@ -34,6 +34,22 @@ function isExpoGo(): boolean {
   }
 }
 
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err: unknown) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
+
 export function useLabelScanner() {
   const isFocused = useIsFocused();
   const cameraRef = useRef<CameraView | null>(null);
@@ -42,15 +58,17 @@ export function useLabelScanner() {
   const photoIdRef = useRef<string | null>(null);
   const edited = useRef<EditedFlags>(emptyEdited());
   const ocrBusy = useRef(false);
+  const ocrSession = useRef(0);
   const lastScanAt = useRef(0);
   const ocrSupported = useRef<boolean | null>(isExpoGo() ? false : null);
 
-  const [cameraOn, setCameraOn] = useState(true);
+  // Match web: camera stays off until staff taps Open camera.
+  const [cameraOn, setCameraOn] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraEpoch, setCameraEpoch] = useState(0);
-  const [scanningEnabled, setScanningEnabled] = useState(true);
+  const [scanningEnabled, setScanningEnabled] = useState(false);
   const [reading, setReading] = useState(false);
-  const [status, setStatus] = useState("Point at the tracking barcode");
+  const [status, setStatus] = useState("Open the camera to scan a shipping label");
   const [confidence, setConfidence] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [photoState, setPhotoState] = useState<string | null>(null);
@@ -62,7 +80,19 @@ export function useLabelScanner() {
   const [tower, setTower] = useState("");
   const [flat, setFlat] = useState("");
 
-  // Remount camera when returning to Scan tab so Android barcode analyzer rebinds.
+  // Leaving Scan (Shelf/Map/Hand/…) turns the camera off so Open camera shows on return.
+  useEffect(() => {
+    if (isFocused) return;
+    ocrSession.current += 1;
+    ocrBusy.current = false;
+    setReading(false);
+    setCameraOn(false);
+    setCameraReady(false);
+    setScanningEnabled(false);
+    setStatus("Open the camera to scan a shipping label");
+  }, [isFocused]);
+
+  // Remount camera when returning to Scan with an active session (Android barcode rebind).
   useEffect(() => {
     if (!isFocused || !cameraOn) return;
     setCameraReady(false);
@@ -110,6 +140,13 @@ export function useLabelScanner() {
     setCameraEpoch((value) => value + 1);
   }
 
+  function cancelOcr(message?: string) {
+    ocrSession.current += 1;
+    ocrBusy.current = false;
+    setReading(false);
+    if (message) setError(message);
+  }
+
   async function runOcrFromCamera(reason: string) {
     if (ocrBusy.current) return;
 
@@ -133,16 +170,22 @@ export function useLabelScanner() {
       return;
     }
 
+    const session = ocrSession.current;
     ocrBusy.current = true;
     setReading(true);
     setStatus(reason);
     setError(null);
     try {
-      const photo = await camera.takePictureAsync({
-        quality: 0.7,
-        skipProcessing: true,
-        shutterSound: false,
-      });
+      const photo = await withTimeout(
+        camera.takePictureAsync({
+          quality: 0.7,
+          skipProcessing: true,
+          shutterSound: false,
+        }),
+        8000,
+        "Label capture timed out. AWB is filled — enter other fields or tap Scan barcode again.",
+      );
+      if (session !== ocrSession.current) return;
       if (!photo?.uri) {
         setError("Could not capture label frame.");
         setScanningEnabled(true);
@@ -151,7 +194,12 @@ export function useLabelScanner() {
       }
       photoIdRef.current = createClientId();
       setPhotoState("Label frame captured");
-      const ocr = await recognizeLabelFromUri(photo.uri);
+      const ocr = await withTimeout(
+        recognizeLabelFromUri(photo.uri),
+        12000,
+        "OCR timed out. AWB is filled — enter other fields or tap Re-read label.",
+      );
+      if (session !== ocrSession.current) return;
       setElapsedMs(ocr.elapsedMs);
       if (!ocr.available) {
         ocrSupported.current = false;
@@ -187,12 +235,16 @@ export function useLabelScanner() {
       );
       bumpCamera();
     } catch (err) {
+      if (session !== ocrSession.current) return;
       setError(err instanceof Error ? err.message : "OCR failed");
+      setStatus("Barcode locked · fill remaining fields");
       setScanningEnabled(true);
       bumpCamera();
     } finally {
-      setReading(false);
-      ocrBusy.current = false;
+      if (session === ocrSession.current) {
+        setReading(false);
+        ocrBusy.current = false;
+      }
     }
   }
 
@@ -241,39 +293,55 @@ export function useLabelScanner() {
   }
 
   function stopCamera() {
+    // Drop any in-flight OCR so "Reading…" cannot block the next package.
+    cancelOcr();
     setCameraOn(false);
     setCameraReady(false);
     setScanningEnabled(false);
   }
 
   function startCamera() {
+    cancelOcr();
     setCameraOn(true);
     setScanningEnabled(true);
     setStatus("Point at the tracking barcode");
     bumpCamera();
   }
 
-  function resetScanner() {
+  /**
+   * Clears label fields.
+   * keepCamera: true after "Scan another package" so bulk intake stays in flow.
+   * keepCamera: false for Clear / first open / leaving the tab.
+   */
+  function resetScanner(options?: { keepCamera?: boolean }) {
+    cancelOcr();
     barcodeRef.current = "";
     rawTextRef.current = "";
     photoIdRef.current = null;
     edited.current = emptyEdited();
-    ocrBusy.current = false;
     lastScanAt.current = 0;
     setCourier("Other");
     setAwb("");
     setName("");
     setTower("");
     setFlat("");
-    setReading(false);
     setConfidence(null);
     setElapsedMs(null);
     setError(null);
     setPhotoState(null);
-    setCameraOn(true);
-    setScanningEnabled(true);
-    setStatus("Point at the tracking barcode");
-    bumpCamera();
+
+    if (options?.keepCamera) {
+      setCameraOn(true);
+      setScanningEnabled(true);
+      setStatus("Point at the tracking barcode");
+      bumpCamera();
+      return;
+    }
+
+    setCameraOn(false);
+    setCameraReady(false);
+    setScanningEnabled(false);
+    setStatus("Open the camera to scan a shipping label");
   }
 
   const canScan = isFocused && cameraOn && scanningEnabled && !reading;
