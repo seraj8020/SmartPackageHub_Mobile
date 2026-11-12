@@ -10,3 +10,9 @@ export async function authHeaders(): Promise<Record<string, string>> {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 }
+
+/** Bearer only — for multipart uploads (do not set Content-Type). */
+export async function authTokenHeader(): Promise<Record<string, string>> {
+  const token = await tokenStorage.getToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}

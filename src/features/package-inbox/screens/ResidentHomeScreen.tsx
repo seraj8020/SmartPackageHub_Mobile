@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -10,12 +10,14 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { resetToRoot } from "@/app/navigation/navigationHelpers";
 import type { ResidentSessionState } from "@/features/authentication/models/auth.types";
 import {
   clearResidentSession,
   getResidentSession,
 } from "@/features/authentication/services/sessionStorage";
+import { CodApprovalDialog } from "@/features/package-inbox/components/CodApprovalDialog";
 import {
   getResidentPackages,
   getSocieties,
@@ -31,11 +33,13 @@ import {
 
 export function ResidentHomeScreen() {
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const [session, setSession] = useState<ResidentSessionState | null>(null);
   const [societyName, setSocietyName] = useState("");
   const [packages, setPackages] = useState<HubPackage[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [dismissedCodIds, setDismissedCodIds] = useState<Set<string>>(new Set());
 
   const inboxPackages = useMemo(
     () =>
@@ -46,36 +50,66 @@ export function ResidentHomeScreen() {
     [packages],
   );
 
-  const load = useCallback(async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
-    try {
-      const stored = await getResidentSession();
-      if (!stored) {
-        resetToRoot(navigation, "ResidentLogin");
-        return;
+  const pendingCod = useMemo(
+    () =>
+      packages.find(
+        (pkg) =>
+          pkg.isCod &&
+          pkg.codApprovalStatus === "Pending" &&
+          (pkg.status ?? "Received") === "Received" &&
+          !dismissedCodIds.has(pkg.id),
+      ) ?? null,
+    [packages, dismissedCodIds],
+  );
+
+  const pendingCodCount = packages.filter(
+    (pkg) =>
+      pkg.isCod &&
+      pkg.codApprovalStatus === "Pending" &&
+      (pkg.status ?? "Received") === "Received",
+  ).length;
+
+  const load = useCallback(
+    async (isRefresh = false) => {
+      if (isRefresh) setRefreshing(true);
+      else setLoading(true);
+      try {
+        const stored = await getResidentSession();
+        if (!stored) {
+          resetToRoot(navigation, "ResidentLogin");
+          return;
+        }
+        setSession(stored);
+        const [societies, pkgs] = await Promise.all([
+          getSocieties().catch(() => []),
+          getResidentPackages(stored.residentId),
+        ]);
+        const match = societies.find((item) => item.id === stored.societyId);
+        setSocietyName(match?.name ?? "");
+        setPackages(pkgs);
+      } catch {
+        setPackages([]);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
       }
-      setSession(stored);
-      const [societies, pkgs] = await Promise.all([
-        getSocieties().catch(() => []),
-        getResidentPackages(stored.residentId),
-      ]);
-      const match = societies.find((item) => item.id === stored.societyId);
-      setSocietyName(match?.name ?? "");
-      setPackages(pkgs);
-    } catch {
-      setPackages([]);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [navigation]);
+    },
+    [navigation],
+  );
 
   useFocusEffect(
     useCallback(() => {
       void load();
     }, [load]),
   );
+
+  useEffect(() => {
+    if (pendingCodCount === 0) return;
+    const timer = setInterval(() => {
+      void load(true);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [pendingCodCount, load]);
 
   async function signOut() {
     await clearResidentSession();
@@ -84,15 +118,48 @@ export function ResidentHomeScreen() {
   }
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { paddingTop: insets.top }]}>
+      {pendingCod ? (
+        <CodApprovalDialog
+          pkg={pendingCod}
+          onResolved={() => {
+            setDismissedCodIds((prev) => new Set([...prev, pendingCod.id]));
+            void load(true);
+          }}
+          onDismiss={() => {
+            setDismissedCodIds((prev) => new Set([...prev, pendingCod.id]));
+          }}
+        />
+      ) : null}
+
       <View style={styles.hero}>
         <View style={styles.heroTop}>
           <Text style={styles.location} numberOfLines={1}>
             {societyLocationLabel(societyName, session?.towerWing, session?.flatNumber)}
           </Text>
-          <Pressable onPress={() => void signOut()} hitSlop={8}>
-            <Text style={styles.signOut}>Sign out</Text>
-          </Pressable>
+          <View style={styles.heroActions}>
+            <Pressable onPress={() => void signOut()} hitSlop={8}>
+              <Text style={styles.signOut}>Sign out</Text>
+            </Pressable>
+            <Pressable
+              hitSlop={8}
+              onPress={() => {
+                const next = packages.find(
+                  (pkg) => pkg.isCod && pkg.codApprovalStatus === "Pending",
+                );
+                if (!next) return;
+                setDismissedCodIds((prev) => {
+                  const copy = new Set(prev);
+                  copy.delete(next.id);
+                  return copy;
+                });
+              }}
+              style={styles.bell}
+            >
+              <Ionicons name="notifications-outline" size={16} color="rgba(255,255,255,0.75)" />
+              {pendingCodCount > 0 ? <View style={styles.bellDot} /> : null}
+            </Pressable>
+          </View>
         </View>
         <Text style={styles.greeting}>
           {greetingForNow()}, {firstNameFrom(session?.fullName)}!
@@ -116,7 +183,7 @@ export function ResidentHomeScreen() {
       >
         <Text style={styles.sectionTitle}>Shelved at the Hub</Text>
         <Text style={styles.sectionHint}>
-          Only shelved packages appear here · tap to book a door slot
+          Only shelved packages appear here · door slot booking comes next
         </Text>
 
         {loading ? (
@@ -137,8 +204,16 @@ export function ResidentHomeScreen() {
                 <Text style={styles.shelf}>{pkg.shelfCode ?? "—"}</Text>
               </View>
               <Text style={styles.tracking}>
-                {pkg.trackingNumber ?? pkg.recipientName ?? "Package"}
+                {pkg.tracking || pkg.trackingNumber || pkg.recipientName || "Package"}
               </Text>
+              {pkg.pkgNumber ? <Text style={styles.pkgNumber}>{pkg.pkgNumber}</Text> : null}
+              {pkg.isCod ? (
+                <Text style={styles.codChip}>
+                  COD
+                  {pkg.codAmount != null ? ` ₹${pkg.codAmount}` : ""}
+                  {pkg.codApprovalStatus ? ` · ${pkg.codApprovalStatus}` : ""}
+                </Text>
+              ) : null}
               <Text style={styles.received}>
                 Received {new Date(pkg.receivedAt).toLocaleString()}
               </Text>
@@ -155,7 +230,7 @@ const styles = StyleSheet.create({
   hero: {
     backgroundColor: colors.primary,
     paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingTop: 12,
     paddingBottom: 24,
   },
   heroTop: {
@@ -165,8 +240,21 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 4,
   },
+  heroActions: { flexDirection: "row", alignItems: "center", gap: 10 },
   location: { flex: 1, color: "rgba(255,255,255,0.5)", fontSize: 11 },
   signOut: { color: "rgba(255,255,255,0.7)", fontSize: 10, fontWeight: "600" },
+  bell: { position: "relative", padding: 4 },
+  bellDot: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: "#F87171",
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+  },
   greeting: {
     marginTop: 4,
     color: "#fff",
@@ -228,7 +316,20 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   courier: { fontSize: 11, fontWeight: "700", color: colors.primary },
-  shelf: { fontSize: 11, color: colors.textMuted },
+  shelf: { fontSize: 11, color: colors.textMuted, fontWeight: "700" },
   tracking: { fontSize: 14, fontWeight: "600", color: colors.text },
-  received: { marginTop: 4, fontSize: 11, color: colors.textMuted },
+  pkgNumber: { marginTop: 2, fontSize: 10, color: "#9CA3AF" },
+  codChip: {
+    marginTop: 8,
+    alignSelf: "flex-start",
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#92400E",
+    backgroundColor: "#FFFBEB",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    overflow: "hidden",
+  },
+  received: { marginTop: 6, fontSize: 11, color: colors.textMuted },
 });

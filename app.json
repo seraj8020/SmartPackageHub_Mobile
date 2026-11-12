@@ -6,15 +6,20 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "newArchEnabled": false,
     "experiments": {
       "tsconfigPaths": true
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.smartpackagehub.mobile"
+      "bundleIdentifier": "com.smartpackagehub.mobile",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Smart Package Hub uses the camera to scan package tracking barcodes and read shipping labels on-device."
+      }
     },
     "android": {
       "package": "com.smartpackagehub.mobile",
+      "permissions": ["android.permission.CAMERA"],
       "adaptiveIcon": {
         "backgroundColor": "#1C3D5A",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -27,7 +32,17 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-secure-store"
+      "expo-dev-client",
+      "expo-secure-store",
+      "expo-sqlite",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Smart Package Hub to access your camera for barcode and label scanning.",
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": true
+        }
+      ]
     ]
   }
 }

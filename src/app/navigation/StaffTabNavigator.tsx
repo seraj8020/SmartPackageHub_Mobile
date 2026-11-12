@@ -1,7 +1,9 @@
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import type { StaffTabParamList } from "@/app/navigation/types";
-import { StaffScanPlaceholderScreen } from "@/features/package-intake/screens/StaffScanPlaceholderScreen";
+import { StaffReceivedPackagesScreen } from "@/features/package-inbox/screens/StaffReceivedPackagesScreen";
+import { StaffShelvedPackagesScreen } from "@/features/package-inbox/screens/StaffShelvedPackagesScreen";
+import { StaffScanScreen } from "@/features/package-intake/screens/StaffScanScreen";
 import { StaffTabPlaceholderScreen } from "@/features/package-intake/screens/StaffTabPlaceholderScreen";
 import { colors } from "@/shared/theme/colors";
 
@@ -35,7 +37,7 @@ export function StaffTabNavigator() {
     >
       <Tab.Screen
         name="Scan"
-        component={StaffScanPlaceholderScreen}
+        component={StaffScanScreen}
         options={{
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="scan-outline" size={size - 4} color={color} />
@@ -44,34 +46,22 @@ export function StaffTabNavigator() {
       />
       <Tab.Screen
         name="Inbox"
+        component={StaffReceivedPackagesScreen}
         options={{
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="file-tray-outline" size={size - 4} color={color} />
           ),
         }}
-      >
-        {() => (
-          <Placeholder
-            title="Inbox"
-            body="Received packages waiting for shelf assign (same Inbox tab as web)."
-          />
-        )}
-      </Tab.Screen>
+      />
       <Tab.Screen
         name="Shelf"
+        component={StaffShelvedPackagesScreen}
         options={{
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="cube-outline" size={size - 4} color={color} />
           ),
         }}
-      >
-        {() => (
-          <Placeholder
-            title="Shelf"
-            body="Shelved packages ready for dispatch (same Shelf tab as web)."
-          />
-        )}
-      </Tab.Screen>
+      />
       <Tab.Screen
         name="Map"
         options={{
