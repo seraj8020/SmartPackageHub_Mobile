@@ -26,7 +26,7 @@ import { ResidentMatchList } from "@/features/package-intake/components/Resident
 import { ResidentSearchField } from "@/features/package-intake/components/ResidentSearchField";
 import { usePackageIntake } from "@/features/package-intake/hooks/usePackageIntake";
 import { startIntakeQueueSync } from "@/features/package-intake/services/intakeQueueSync";
-import { getCourierCarriers } from "@/shared/services/courierApi";
+import { getIntakeCarriers } from "@/features/package-intake/services/intakeApi";
 import { getSocieties } from "@/shared/services/packageApi";
 import { tokenStorage } from "@/shared/services/tokenStorage";
 import { colors } from "@/shared/theme/colors";
@@ -128,7 +128,7 @@ function StaffScanBody({
 
   useEffect(() => {
     let active = true;
-    void getCourierCarriers(societyId).then((items) => {
+    void getIntakeCarriers(societyId).then((items) => {
       if (active) setCarriers(items);
     });
     return () => {

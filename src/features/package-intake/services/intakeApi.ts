@@ -1,3 +1,4 @@
+import { INTAKE_COURIERS } from "@/features/package-intake/constants";
 import { API, authHeaders, authTokenHeader } from "@/shared/services/apiClient";
 
 export interface ResidentMatch {
@@ -105,6 +106,24 @@ export async function searchResidents(
   });
   if (!response.ok) await readError(response, `Resident search failed (${response.status})`);
   return response.json() as Promise<ResidentMatch[]>;
+}
+
+/** Carrier names for the scan courier dropdown. Falls back to seed list on failure. */
+export async function getIntakeCarriers(societyId?: string | null): Promise<string[]> {
+  try {
+    const params = new URLSearchParams();
+    if (societyId) params.set("societyId", societyId);
+    const qs = params.toString();
+    const response = await fetch(`${API}/intake/carriers${qs ? `?${qs}` : ""}`, {
+      headers: await authHeaders(),
+    });
+    if (!response.ok) return [...INTAKE_COURIERS];
+    const rows = (await response.json()) as unknown[];
+    const carriers = rows.map((item) => String(item)).filter((item) => item.trim().length > 0);
+    return carriers.length > 0 ? carriers : [...INTAKE_COURIERS];
+  } catch {
+    return [...INTAKE_COURIERS];
+  }
 }
 
 export async function confirmIntake(
