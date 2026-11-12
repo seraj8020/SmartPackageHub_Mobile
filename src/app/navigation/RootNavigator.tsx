@@ -5,6 +5,7 @@ import { ResidentTabNavigator } from "@/app/navigation/ResidentTabNavigator";
 import { StaffTabNavigator } from "@/app/navigation/StaffTabNavigator";
 import { LaunchScreen } from "@/features/authentication/screens/LaunchScreen";
 import { ResidentOtpLoginScreen } from "@/features/authentication/screens/ResidentOtpLoginScreen";
+import { ResidentRegistrationScreen } from "@/features/authentication/screens/ResidentRegistrationScreen";
 import { StaffLoginScreen } from "@/features/authentication/screens/StaffLoginScreen";
 import { colors } from "@/shared/theme/colors";
 
@@ -31,6 +32,11 @@ export function RootNavigator() {
           name="ResidentLogin"
           component={ResidentOtpLoginScreen}
           options={{ title: "Resident" }}
+        />
+        <Stack.Screen
+          name="ResidentRegister"
+          component={ResidentRegistrationScreen}
+          options={{ title: "Register" }}
         />
         <Stack.Screen
           name="StaffLogin"

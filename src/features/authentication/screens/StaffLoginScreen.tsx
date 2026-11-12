@@ -5,11 +5,13 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View,
 } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import * as SecureStore from "expo-secure-store";
 import type { RootStackParamList } from "@/app/navigation/types";
+import { AuthFormScreen } from "@/features/authentication/components/AuthFormScreen";
 import { SESSION_DURATION_MS } from "@/features/authentication/models/auth.types";
+import { STAFF_NAME_STORAGE_KEY } from "@/features/package-intake/constants";
 import { loginStaff } from "@/features/authentication/services/staffAuthApi";
 import {
   clearResidentSession,
@@ -46,6 +48,10 @@ export function StaffLoginScreen({ navigation }: Props) {
         primarySocietyId: session.primarySocietyId,
         expiresAt: Date.now() + SESSION_DURATION_MS,
       });
+      await SecureStore.setItemAsync(
+        STAFF_NAME_STORAGE_KEY,
+        (session.username || user).trim(),
+      );
       navigation.replace("StaffApp");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to sign in.");
@@ -55,7 +61,7 @@ export function StaffLoginScreen({ navigation }: Props) {
   }
 
   return (
-    <View style={styles.container}>
+    <AuthFormScreen>
       <Text style={styles.title}>Staff sign-in</Text>
       <Text style={styles.hint}>Username / password (same API as web)</Text>
 
@@ -68,6 +74,7 @@ export function StaffLoginScreen({ navigation }: Props) {
         onChangeText={setUsername}
         editable={!loading}
         placeholderTextColor={colors.textMuted}
+        returnKeyType="next"
       />
       <TextInput
         style={styles.input}
@@ -77,6 +84,8 @@ export function StaffLoginScreen({ navigation }: Props) {
         onChangeText={setPassword}
         editable={!loading}
         placeholderTextColor={colors.textMuted}
+        returnKeyType="done"
+        onSubmitEditing={() => void submit()}
       />
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -92,20 +101,13 @@ export function StaffLoginScreen({ navigation }: Props) {
           <Text style={styles.buttonText}>Sign in</Text>
         )}
       </Pressable>
-    </View>
+    </AuthFormScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-    padding: 24,
-    justifyContent: "center",
-    gap: 12,
-  },
   title: { fontSize: 22, fontWeight: "700", color: colors.primary },
-  hint: { color: colors.textMuted, marginBottom: 8 },
+  hint: { color: colors.textMuted, marginBottom: 4 },
   input: {
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -123,6 +125,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     minHeight: 48,
     justifyContent: "center",
+    marginTop: 4,
   },
   buttonDisabled: { opacity: 0.7 },
   buttonText: { color: "#fff", fontWeight: "600" },

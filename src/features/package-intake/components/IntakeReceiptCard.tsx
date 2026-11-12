@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import QRCode from "react-native-qrcode-svg";
 import type { ConfirmIntakeResult } from "@/features/package-intake/services/intakeApi";
 import { colors } from "@/shared/theme/colors";
 
@@ -8,6 +9,8 @@ type Props = {
   courierFallback: string;
   onBack?: () => void;
   backLabel?: string;
+  damageState?: string | null;
+  photoState?: string | null;
 };
 
 export function IntakeReceiptCard({
@@ -15,7 +18,12 @@ export function IntakeReceiptCard({
   courierFallback,
   onBack,
   backLabel = "Back to Received",
+  damageState,
+  photoState,
 }: Props) {
+  const qrPayload = (receipt.pickupQrPayload ?? "").trim();
+  const showPickup = Boolean(receipt.pickupOtp) || Boolean(qrPayload);
+
   return (
     <View style={styles.root}>
       <View style={styles.header}>
@@ -27,7 +35,8 @@ export function IntakeReceiptCard({
         ) : null}
         <Text style={styles.headerTitle}>Intake saved</Text>
         <Text style={styles.headerSub}>
-          {receipt.shelfCode ? "Shelf assigned." : "Shelf is unassigned."} Resident notice is queued.
+          {receipt.shelfCode ? "Shelf assigned." : "Shelf is unassigned."} Resident notice is
+          queued.
         </Text>
       </View>
       <View style={styles.card}>
@@ -46,12 +55,36 @@ export function IntakeReceiptCard({
             {receipt.resident.name} · {receipt.resident.unit}
           </Text>
         ) : null}
-        {receipt.pickupOtp ? (
-          <View style={styles.otpBox}>
-            <Text style={styles.otpLabel}>Pickup OTP</Text>
-            <Text style={styles.otpValue}>{receipt.pickupOtp}</Text>
+
+        {showPickup ? (
+          <View style={styles.pickupRow}>
+            {qrPayload ? (
+              <View style={styles.qrWrap}>
+                <QRCode
+                  value={qrPayload}
+                  size={96}
+                  backgroundColor="#FFFFFF"
+                  color={colors.primary}
+                />
+              </View>
+            ) : null}
+            <View style={styles.otpCol}>
+              {receipt.pickupOtp ? (
+                <>
+                  <Text style={styles.otpLabel}>Pickup OTP</Text>
+                  <Text style={styles.otpValue}>{receipt.pickupOtp}</Text>
+                </>
+              ) : null}
+              <Text style={styles.otpHint}>Push and WhatsApp queued</Text>
+              {qrPayload ? (
+                <Text style={styles.otpHint}>Resident can scan QR or enter OTP</Text>
+              ) : null}
+            </View>
           </View>
         ) : null}
+
+        {damageState ? <Text style={styles.note}>{damageState}</Text> : null}
+        {photoState ? <Text style={styles.note}>{photoState}</Text> : null}
       </View>
       {onBack ? (
         <Pressable style={styles.cta} onPress={onBack}>
@@ -87,14 +120,20 @@ const styles = StyleSheet.create({
   shelf: { fontSize: 26, fontWeight: "800", color: colors.primary, marginTop: 4 },
   meta: { fontSize: 12, color: colors.textMuted, marginTop: 6 },
   resident: { fontSize: 12, color: colors.text, marginTop: 8, fontWeight: "600" },
-  otpBox: {
+  pickupRow: {
     marginTop: 14,
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: "#ECFDF5",
-    borderWidth: 1,
-    borderColor: "#A7F3D0",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
   },
+  qrWrap: {
+    padding: 8,
+    borderRadius: 12,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
+  },
+  otpCol: { flex: 1, minWidth: 0 },
   otpLabel: {
     fontSize: 10,
     fontWeight: "800",
@@ -103,6 +142,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
   },
   otpValue: { marginTop: 4, fontSize: 22, fontWeight: "800", color: colors.primary },
+  otpHint: { marginTop: 4, fontSize: 10, color: colors.textMuted },
+  note: { marginTop: 10, fontSize: 11, color: colors.textMuted },
   cta: {
     marginHorizontal: 16,
     backgroundColor: colors.primary,

@@ -118,7 +118,11 @@ function StaffScanBody({
   sideInset: number;
   onSignOut: () => Promise<void>;
 }) {
-  const intake = usePackageIntake({ societyId, staffUserId });
+  const intake = usePackageIntake({
+    societyId,
+    staffUserId,
+    defaultStaffName: username,
+  });
 
   if (intake.receipt) {
     return (

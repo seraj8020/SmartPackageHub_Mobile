@@ -1,6 +1,7 @@
 export type RootStackParamList = {
   Launch: undefined;
   ResidentLogin: undefined;
+  ResidentRegister: undefined;
   StaffLogin: undefined;
   ResidentApp: undefined;
   StaffApp: undefined;

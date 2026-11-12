@@ -1,5 +1,58 @@
 import { API, authHeaders } from "@/shared/services/apiClient";
-import type { ResidentLoginSession } from "@/features/authentication/models/auth.types";
+import type {
+  RegisteredResident,
+  RegisterResidentRequest,
+  ResidentLoginSession,
+} from "@/features/authentication/models/auth.types";
+
+/**
+ * Self-registration via existing POST /residents/addresident.
+ * Passes empty userId so the API creates the linked Resident-role user.
+ */
+export async function registerResident(
+  request: RegisterResidentRequest,
+): Promise<RegisteredResident> {
+  const response = await fetch(`${API}/residents/addresident`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      societyId: request.societyId,
+      userId: "00000000-0000-0000-0000-000000000000",
+      fullname: request.fullName,
+      phoneNo: request.phoneNumber,
+      towerWing: request.towerWing,
+      flatNumber: request.flatNumber,
+      isMember: true,
+      picUrl: "",
+      isActive: true,
+    }),
+  });
+
+  if (!response.ok) {
+    const body = (await response.json().catch(() => ({}))) as {
+      message?: string;
+      Message?: string;
+    };
+    if (response.status === 409) {
+      throw new Error("An account with this mobile number already exists.");
+    }
+    throw new Error(
+      body.message ?? body.Message ?? "We could not create your account. Please try again.",
+    );
+  }
+
+  const body = (await response.json()) as { id?: string; Id?: string };
+  return {
+    id: String(body.id ?? body.Id ?? ""),
+    userId: "",
+    societyId: request.societyId,
+    fullName: request.fullName,
+    towerWing: request.towerWing,
+    flatNumber: request.flatNumber,
+    phoneNumber: request.phoneNumber,
+    isActive: true,
+  };
+}
 
 export async function requestResidentLoginOtp(
   phoneNumber: string,

@@ -5,10 +5,10 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View,
 } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "@/app/navigation/types";
+import { AuthFormScreen } from "@/features/authentication/components/AuthFormScreen";
 import { SESSION_DURATION_MS } from "@/features/authentication/models/auth.types";
 import {
   requestResidentLoginOtp,
@@ -93,7 +93,7 @@ export function ResidentOtpLoginScreen({ navigation }: Props) {
   }
 
   return (
-    <View style={styles.container}>
+    <AuthFormScreen>
       <Text style={styles.title}>Resident sign-in</Text>
       <Text style={styles.hint}>OTP login (same API as web)</Text>
 
@@ -105,6 +105,7 @@ export function ResidentOtpLoginScreen({ navigation }: Props) {
         onChangeText={setPhoneNumber}
         editable={!sending && !verifying}
         placeholderTextColor={colors.textMuted}
+        returnKeyType="done"
       />
 
       {codeSent ? (
@@ -116,6 +117,8 @@ export function ResidentOtpLoginScreen({ navigation }: Props) {
           onChangeText={setOtp}
           editable={!verifying}
           placeholderTextColor={colors.textMuted}
+          returnKeyType="done"
+          onSubmitEditing={() => void verifyCode()}
         />
       ) : null}
 
@@ -157,20 +160,21 @@ export function ResidentOtpLoginScreen({ navigation }: Props) {
           </Pressable>
         </>
       )}
-    </View>
+
+      <Pressable
+        style={styles.linkButton}
+        onPress={() => navigation.navigate("ResidentRegister")}
+        disabled={sending || verifying}
+      >
+        <Text style={styles.linkButtonText}>New here? Register</Text>
+      </Pressable>
+    </AuthFormScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-    padding: 24,
-    justifyContent: "center",
-    gap: 12,
-  },
   title: { fontSize: 22, fontWeight: "700", color: colors.primary },
-  hint: { color: colors.textMuted, marginBottom: 8 },
+  hint: { color: colors.textMuted, marginBottom: 4 },
   input: {
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -190,6 +194,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     minHeight: 48,
     justifyContent: "center",
+    marginTop: 4,
   },
   buttonDisabled: { opacity: 0.7 },
   buttonText: { color: "#fff", fontWeight: "600" },
@@ -202,4 +207,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   secondaryButtonText: { color: colors.primary, fontWeight: "600" },
+  linkButton: {
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+  linkButtonText: { color: colors.primary, fontWeight: "600", fontSize: 14 },
 });

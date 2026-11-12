@@ -27,6 +27,25 @@ export interface StaffLoginSession {
   primarySocietyId: string | null;
 }
 
+export interface RegisterResidentRequest {
+  fullName: string;
+  societyId: string;
+  towerWing: string;
+  flatNumber: string;
+  phoneNumber: string;
+}
+
+export interface RegisteredResident {
+  id: string;
+  userId: string;
+  societyId: string;
+  fullName: string;
+  towerWing: string;
+  flatNumber: string;
+  phoneNumber: string;
+  isActive: boolean;
+}
+
 export interface StaffSessionState {
   userId: string;
   username: string;

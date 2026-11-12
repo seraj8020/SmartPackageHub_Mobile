@@ -1,4 +1,13 @@
-import { StyleSheet, Text, TextInput, View, Pressable, ScrollView } from "react-native";
+import { useState } from "react";
+import {
+  FlatList,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { INTAKE_COURIERS } from "@/features/package-intake/constants";
 import { colors } from "@/shared/theme/colors";
 
@@ -27,27 +36,21 @@ export function IntakeLabelFields({
   onTowerChange,
   onFlatChange,
 }: Props) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const courierValue = (INTAKE_COURIERS as readonly string[]).includes(courier)
+    ? courier
+    : "Other";
+
   return (
     <View style={styles.block}>
       <Text style={styles.label}>Courier</Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.courierRow}
+      <Pressable
+        style={[styles.input, styles.dropdown]}
+        onPress={() => setPickerOpen(true)}
       >
-        {INTAKE_COURIERS.map((item) => {
-          const active = item === courier;
-          return (
-            <Pressable
-              key={item}
-              onPress={() => onCourierChange(item)}
-              style={[styles.chip, active && styles.chipActive]}
-            >
-              <Text style={[styles.chipText, active && styles.chipTextActive]}>{item}</Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+        <Text style={styles.dropdownValue}>{courierValue}</Text>
+        <Text style={styles.dropdownChevron}>▾</Text>
+      </Pressable>
 
       <Text style={styles.label}>AWB / tracking</Text>
       <TextInput
@@ -93,6 +96,46 @@ export function IntakeLabelFields({
           />
         </View>
       </View>
+
+      <Modal
+        visible={pickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPickerOpen(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setPickerOpen(false)}
+          />
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Select courier</Text>
+            <FlatList
+              data={[...INTAKE_COURIERS]}
+              keyExtractor={(item) => item}
+              keyboardShouldPersistTaps="handled"
+              renderItem={({ item }) => {
+                const active = item === courierValue;
+                return (
+                  <Pressable
+                    style={[styles.optionRow, active && styles.optionRowActive]}
+                    onPress={() => {
+                      onCourierChange(item);
+                      setPickerOpen(false);
+                    }}
+                  >
+                    <Text
+                      style={[styles.optionText, active && styles.optionTextActive]}
+                    >
+                      {item}
+                    </Text>
+                  </Pressable>
+                );
+              }}
+            />
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -108,21 +151,6 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     marginTop: 8,
   },
-  courierRow: { gap: 8, paddingBottom: 2 },
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  chipActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  chipText: { fontSize: 12, fontWeight: "700", color: colors.text },
-  chipTextActive: { color: "#fff" },
   input: {
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -133,6 +161,41 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.text,
   },
+  dropdown: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  dropdownValue: { fontSize: 14, color: colors.text, fontWeight: "600" },
+  dropdownChevron: { fontSize: 12, color: colors.textMuted },
   row: { flexDirection: "row", gap: 10 },
   half: { flex: 1 },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "center",
+    padding: 24,
+  },
+  modalCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    maxHeight: "70%",
+    paddingVertical: 12,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: colors.primary,
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  optionRow: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
+  optionRowActive: { backgroundColor: colors.primaryMuted },
+  optionText: { color: colors.text, fontSize: 15 },
+  optionTextActive: { color: colors.primary, fontWeight: "700" },
 });

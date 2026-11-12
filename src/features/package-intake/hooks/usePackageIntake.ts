@@ -19,11 +19,17 @@ function parsePositiveNumber(value: string): number | undefined {
   return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
-export function usePackageIntake(options: { societyId: string; staffUserId: string }) {
-  const { societyId, staffUserId } = options;
+export function usePackageIntake(options: {
+  societyId: string;
+  staffUserId: string;
+  /** Logged-in staff username / display name used to prefill the staff name field. */
+  defaultStaffName?: string;
+}) {
+  const { societyId, staffUserId, defaultStaffName } = options;
   const alive = useRef(true);
   const manualPick = useRef(false);
   const requestId = useRef(createClientId());
+  const loginName = (defaultStaffName ?? "").trim();
 
   const scanner = useLabelScanner();
   const matching = useResidentMatching({
@@ -47,20 +53,32 @@ export function usePackageIntake(options: { societyId: string; staffUserId: stri
   const [damaged, setDamaged] = useState(false);
   const [damageNote, setDamageNote] = useState("");
   const [damagePhoto, setDamagePhoto] = useState<string | null>(null);
-  const [staffName, setStaffName] = useState("Hub Staff");
+  const [staffName, setStaffName] = useState(loginName || "Hub Staff");
   const [busy, setBusy] = useState(false);
   const [receipt, setReceipt] = useState<ConfirmIntakeResult | null>(null);
   const [damageState, setDamageState] = useState<string | null>(null);
 
   useEffect(() => {
     alive.current = true;
-    void SecureStore.getItemAsync(STAFF_NAME_STORAGE_KEY).then((value) => {
-      if (alive.current && value) setStaffName(value);
-    });
+    void (async () => {
+      const stored = (await SecureStore.getItemAsync(STAFF_NAME_STORAGE_KEY))?.trim();
+      if (!alive.current) return;
+      // Prefer a previously saved custom name; otherwise use the logged-in account.
+      if (stored && stored !== "Hub Staff") {
+        setStaffName(stored);
+        return;
+      }
+      if (loginName) {
+        setStaffName(loginName);
+        await SecureStore.setItemAsync(STAFF_NAME_STORAGE_KEY, loginName);
+        return;
+      }
+      if (stored) setStaffName(stored);
+    })();
     return () => {
       alive.current = false;
     };
-  }, []);
+  }, [loginName]);
 
   function chooseResident(resident: ResidentMatch) {
     matching.selectResident(resident);
