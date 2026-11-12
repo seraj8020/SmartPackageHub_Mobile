@@ -111,20 +111,24 @@ export async function searchResidents(
 
 /** Carrier names for the scan courier dropdown from society CourierAgents (DB). */
 export async function getIntakeCarriers(societyId?: string | null): Promise<string[]> {
-  try {
-    const params = new URLSearchParams();
-    if (societyId) params.set("societyId", societyId);
-    const qs = params.toString();
-    const response = await fetch(`${API}/intake/carriers${qs ? `?${qs}` : ""}`, {
-      headers: await authHeaders(),
-    });
-    if (!response.ok) return [...OTHER_ONLY];
-    const rows = (await response.json()) as unknown[];
-    const carriers = rows.map((item) => String(item)).filter((item) => item.trim().length > 0);
-    return carriers.length > 0 ? carriers : [...OTHER_ONLY];
-  } catch {
+  const params = new URLSearchParams();
+  if (societyId) params.set("societyId", societyId);
+  const qs = params.toString();
+  const response = await fetch(`${API}/intake/carriers${qs ? `?${qs}` : ""}`, {
+    headers: await authHeaders(),
+  });
+  if (!response.ok) {
+    // Keep intake usable, but do not invent courier brands.
     return [...OTHER_ONLY];
   }
+  const body = (await response.json()) as unknown;
+  const rows = Array.isArray(body)
+    ? body
+    : Array.isArray((body as { data?: unknown })?.data)
+      ? ((body as { data: unknown[] }).data)
+      : [];
+  const carriers = rows.map((item) => String(item)).filter((item) => item.trim().length > 0);
+  return carriers.length > 0 ? carriers : [...OTHER_ONLY];
 }
 
 export async function confirmIntake(
