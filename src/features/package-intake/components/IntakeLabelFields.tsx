@@ -17,6 +17,7 @@ type Props = {
   name: string;
   tower: string;
   flat: string;
+  carriers?: readonly string[];
   onCourierChange: (value: string) => void;
   onAwbChange: (value: string) => void;
   onNameChange: (value: string) => void;
@@ -30,6 +31,7 @@ export function IntakeLabelFields({
   name,
   tower,
   flat,
+  carriers,
   onCourierChange,
   onAwbChange,
   onNameChange,
@@ -37,7 +39,8 @@ export function IntakeLabelFields({
   onFlatChange,
 }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false);
-  const courierValue = (INTAKE_COURIERS as readonly string[]).includes(courier)
+  const options = carriers && carriers.length > 0 ? carriers : INTAKE_COURIERS;
+  const courierValue = (options as readonly string[]).includes(courier)
     ? courier
     : "Other";
 
@@ -111,7 +114,7 @@ export function IntakeLabelFields({
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Select courier</Text>
             <FlatList
-              data={[...INTAKE_COURIERS]}
+              data={[...options]}
               keyExtractor={(item) => item}
               keyboardShouldPersistTaps="handled"
               renderItem={({ item }) => {

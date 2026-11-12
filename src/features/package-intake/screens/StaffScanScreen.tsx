@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -26,6 +26,7 @@ import { ResidentMatchList } from "@/features/package-intake/components/Resident
 import { ResidentSearchField } from "@/features/package-intake/components/ResidentSearchField";
 import { usePackageIntake } from "@/features/package-intake/hooks/usePackageIntake";
 import { startIntakeQueueSync } from "@/features/package-intake/services/intakeQueueSync";
+import { getCourierCarriers } from "@/shared/services/courierApi";
 import { getSocieties } from "@/shared/services/packageApi";
 import { tokenStorage } from "@/shared/services/tokenStorage";
 import { colors } from "@/shared/theme/colors";
@@ -118,11 +119,22 @@ function StaffScanBody({
   sideInset: number;
   onSignOut: () => Promise<void>;
 }) {
+  const [carriers, setCarriers] = useState<string[]>([]);
   const intake = usePackageIntake({
     societyId,
     staffUserId,
     defaultStaffName: username,
   });
+
+  useEffect(() => {
+    let active = true;
+    void getCourierCarriers(societyId).then((items) => {
+      if (active) setCarriers(items);
+    });
+    return () => {
+      active = false;
+    };
+  }, [societyId]);
 
   if (intake.receipt) {
     return (
@@ -195,6 +207,7 @@ function StaffScanBody({
           name={intake.name}
           tower={intake.tower}
           flat={intake.flat}
+          carriers={carriers}
           onCourierChange={intake.setCourierEdited}
           onAwbChange={intake.setAwbEdited}
           onNameChange={intake.setNameEdited}
