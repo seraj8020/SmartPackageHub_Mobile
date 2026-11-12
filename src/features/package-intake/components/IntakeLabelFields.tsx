@@ -8,8 +8,9 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { INTAKE_COURIERS } from "@/features/package-intake/constants";
 import { colors } from "@/shared/theme/colors";
+
+const OTHER_ONLY = ["Other"] as const;
 
 type Props = {
   courier: string;
@@ -39,7 +40,7 @@ export function IntakeLabelFields({
   onFlatChange,
 }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false);
-  const options = carriers && carriers.length > 0 ? carriers : INTAKE_COURIERS;
+  const options = carriers && carriers.length > 0 ? carriers : OTHER_ONLY;
   const courierValue = (options as readonly string[]).includes(courier)
     ? courier
     : "Other";

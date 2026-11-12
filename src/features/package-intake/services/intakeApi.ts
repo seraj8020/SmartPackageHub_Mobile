@@ -1,5 +1,6 @@
-import { INTAKE_COURIERS } from "@/features/package-intake/constants";
 import { API, authHeaders, authTokenHeader } from "@/shared/services/apiClient";
+
+const OTHER_ONLY = ["Other"] as const;
 
 export interface ResidentMatch {
   id: string;
@@ -108,7 +109,7 @@ export async function searchResidents(
   return response.json() as Promise<ResidentMatch[]>;
 }
 
-/** Carrier names for the scan courier dropdown. Falls back to seed list on failure. */
+/** Carrier names for the scan courier dropdown from society CourierAgents (DB). */
 export async function getIntakeCarriers(societyId?: string | null): Promise<string[]> {
   try {
     const params = new URLSearchParams();
@@ -117,12 +118,12 @@ export async function getIntakeCarriers(societyId?: string | null): Promise<stri
     const response = await fetch(`${API}/intake/carriers${qs ? `?${qs}` : ""}`, {
       headers: await authHeaders(),
     });
-    if (!response.ok) return [...INTAKE_COURIERS];
+    if (!response.ok) return [...OTHER_ONLY];
     const rows = (await response.json()) as unknown[];
     const carriers = rows.map((item) => String(item)).filter((item) => item.trim().length > 0);
-    return carriers.length > 0 ? carriers : [...INTAKE_COURIERS];
+    return carriers.length > 0 ? carriers : [...OTHER_ONLY];
   } catch {
-    return [...INTAKE_COURIERS];
+    return [...OTHER_ONLY];
   }
 }
 
