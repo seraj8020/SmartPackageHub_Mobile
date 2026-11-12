@@ -25,6 +25,7 @@ import {
 } from "@/shared/services/packageApi";
 import { tokenStorage } from "@/shared/services/tokenStorage";
 import { colors } from "@/shared/theme/colors";
+import { SignOutButton } from "@/shared/ui/SignOutButton";
 import {
   firstNameFrom,
   greetingForNow,
@@ -132,15 +133,20 @@ export function ResidentHomeScreen() {
         />
       ) : null}
 
-      <View style={styles.hero}>
+      <View
+        style={[
+          styles.hero,
+          {
+            paddingLeft: 20 + Math.max(insets.left, 0),
+            paddingRight: 20 + Math.max(insets.right, 0),
+          },
+        ]}
+      >
         <View style={styles.heroTop}>
           <Text style={styles.location} numberOfLines={1}>
             {societyLocationLabel(societyName, session?.towerWing, session?.flatNumber)}
           </Text>
           <View style={styles.heroActions}>
-            <Pressable onPress={() => void signOut()} hitSlop={8}>
-              <Text style={styles.signOut}>Sign out</Text>
-            </Pressable>
             <Pressable
               hitSlop={8}
               onPress={() => {
@@ -155,10 +161,13 @@ export function ResidentHomeScreen() {
                 });
               }}
               style={styles.bell}
+              accessibilityRole="button"
+              accessibilityLabel="Notifications"
             >
-              <Ionicons name="notifications-outline" size={16} color="rgba(255,255,255,0.75)" />
+              <Ionicons name="notifications-outline" size={18} color="rgba(255,255,255,0.85)" />
               {pendingCodCount > 0 ? <View style={styles.bellDot} /> : null}
             </Pressable>
+            <SignOutButton onPress={() => void signOut()} />
           </View>
         </View>
         <Text style={styles.greeting}>
@@ -229,7 +238,6 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   hero: {
     backgroundColor: colors.primary,
-    paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 24,
   },
@@ -237,17 +245,37 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 8,
+    gap: 12,
     marginBottom: 4,
   },
-  heroActions: { flexDirection: "row", alignItems: "center", gap: 10 },
-  location: { flex: 1, color: "rgba(255,255,255,0.5)", fontSize: 11 },
-  signOut: { color: "rgba(255,255,255,0.7)", fontSize: 10, fontWeight: "600" },
-  bell: { position: "relative", padding: 4 },
+  heroActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexShrink: 0,
+    gap: 10,
+  },
+  location: {
+    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    color: "rgba(255,255,255,0.5)",
+    fontSize: 11,
+    paddingRight: 4,
+  },
+  bell: {
+    position: "relative",
+    flexShrink: 0,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.1)",
+  },
   bellDot: {
     position: "absolute",
-    top: 4,
-    right: 4,
+    top: 6,
+    right: 6,
     width: 7,
     height: 7,
     borderRadius: 4,
@@ -281,7 +309,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   statValue: { color: "#fff", fontSize: 24, fontWeight: "700", marginTop: 2 },
-  list: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 24 },
+  list: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 40 },
   sectionTitle: {
     fontSize: 11,
     fontWeight: "700",

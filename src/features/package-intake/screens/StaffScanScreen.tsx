@@ -29,6 +29,7 @@ import { startIntakeQueueSync } from "@/features/package-intake/services/intakeQ
 import { getSocieties } from "@/shared/services/packageApi";
 import { tokenStorage } from "@/shared/services/tokenStorage";
 import { colors } from "@/shared/theme/colors";
+import { SignOutButton } from "@/shared/ui/SignOutButton";
 
 export function StaffScanScreen() {
   const navigation = useNavigation();
@@ -90,6 +91,7 @@ export function StaffScanScreen() {
       societyName={societyName}
       username={session.username}
       topInset={insets.top}
+      sideInset={Math.max(insets.left, insets.right, 0)}
       onSignOut={async () => {
         await clearStaffSession();
         await tokenStorage.removeToken();
@@ -105,6 +107,7 @@ function StaffScanBody({
   societyName,
   username,
   topInset,
+  sideInset,
   onSignOut,
 }: {
   societyId: string;
@@ -112,6 +115,7 @@ function StaffScanBody({
   societyName: string;
   username: string;
   topInset: number;
+  sideInset: number;
   onSignOut: () => Promise<void>;
 }) {
   const intake = usePackageIntake({ societyId, staffUserId });
@@ -135,7 +139,15 @@ function StaffScanBody({
       style={[styles.root, { paddingTop: topInset }]}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <View style={styles.header}>
+      <View
+        style={[
+          styles.header,
+          {
+            paddingLeft: 12 + sideInset,
+            paddingRight: 12 + sideInset,
+          },
+        ]}
+      >
         <View style={styles.headerText}>
           <Text style={styles.society} numberOfLines={1}>
             {societyName}
@@ -144,9 +156,7 @@ function StaffScanBody({
             {username}
           </Text>
         </View>
-        <Pressable onPress={() => void onSignOut()} hitSlop={8}>
-          <Text style={styles.signOut}>Sign out</Text>
-        </Pressable>
+        <SignOutButton onPress={() => void onSignOut()} />
       </View>
 
       <OfflineQueueBanner />
@@ -164,12 +174,14 @@ function StaffScanBody({
         <IntakeCameraPanel
           cameraRef={intake.cameraRef}
           cameraOn={intake.cameraOn}
+          cameraEpoch={intake.cameraEpoch}
           scanningEnabled={intake.scanningEnabled}
           reading={intake.reading}
           status={intake.status}
           confidence={intake.confidence}
           photoState={intake.photoState}
           onBarcodeScanned={intake.onBarcodeScanned}
+          onCameraReady={intake.onCameraReady}
         />
 
         <IntakeLabelFields
@@ -275,19 +287,17 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   header: {
     backgroundColor: colors.primary,
-    paddingHorizontal: 12,
     paddingVertical: 10,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 8,
+    gap: 12,
   },
-  headerText: { flex: 1, minWidth: 0 },
+  headerText: { flex: 1, flexShrink: 1, minWidth: 0, paddingRight: 8 },
   society: { color: "#fff", fontSize: 12, fontWeight: "700" },
   user: { color: "rgba(255,255,255,0.7)", fontSize: 10, marginTop: 1 },
-  signOut: { color: "rgba(255,255,255,0.8)", fontSize: 11, fontWeight: "600" },
   loading: { padding: 20, color: colors.textMuted },
-  scroll: { paddingHorizontal: 16, paddingBottom: 28, paddingTop: 8 },
+  scroll: { paddingHorizontal: 16, paddingBottom: 40, paddingTop: 8 },
   titleBlock: {
     backgroundColor: colors.primary,
     marginHorizontal: -16,

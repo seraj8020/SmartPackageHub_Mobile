@@ -67,33 +67,37 @@ Create and start a Virtual Device from **Android Studio → Device Manager** bef
 
 ### A) Expo Go on a physical phone
 
-Fast JS iteration (no OCR / ML Kit):
+Fast JS iteration (no OCR / ML Kit). **Must use Expo Go mode** — not the `exp+smartpackagehubmobile://` development-build link.
 
 ```bash
 cd SmartPackageHub_Mobile
 npm install
-npx expo start
+npm run start:go
+# same as: npx expo start --go
 ```
 
 Then:
 
-1. Open **Expo Go** on the phone.
-2. Scan the QR code from the terminal (Android: Expo Go; iOS: Camera → Expo Go).
-3. If the LAN QR fails, press `s` in the terminal and try **tunnel**, or run:
+1. Open **Expo Go** on the phone (same Wi‑Fi as the PC).
+2. Scan the QR code — it should look like `exp://192.168.x.x:8081` (not `exp+smartpackagehubmobile://`).
+3. If the LAN QR fails, press `s` in the terminal for **tunnel**, or run:
 
 ```bash
-npx expo start --tunnel
+npx expo start --go --tunnel
 ```
 
-Equivalent script:
+If Metro was already started by `expo run:android`, stop it (`Ctrl+C`) and start again with `npm run start:go`.
 
-```bash
-npm start
-```
+**API URL on a real phone:** do not use `localhost` in `.env`. Use the QA host or your PC LAN IP, e.g. `EXPO_PUBLIC_API_BASE_URL=http://192.168.1.4:5210` or the default QA `http://34.180.50.189:5000`.
 
-### B) Android Studio emulator (full native / OCR)
+### B) Android Studio emulator
 
-Builds and installs the **development client** APK, then starts Metro:
+**Option 1 — Expo Go on the emulator** (same as phone, no OCR):
+
+1. Install **Expo Go** from Play Store on the emulator (or sideload).
+2. Run `npm run start:go`, then press `a` to open on Android.
+
+**Option 2 — Development build** (full native / OCR):
 
 ```bash
 cd SmartPackageHub_Mobile
@@ -102,34 +106,29 @@ npm install
 # Start the emulator first (Android Studio Device Manager), or let Expo launch it
 
 npx expo prebuild --platform android
-npx expo run:android
-```
-
-Or:
-
-```bash
 npm run android
+# same as: npx expo run:android
 ```
 
 After install:
 
-1. Emulator opens **Smart Package Hub Development Build** (this *is* the Dev Launcher).
-2. Allow permission prompts (camera / nearby devices) if shown.
-3. If it does not auto-connect, enter `http://localhost:8081` and tap **Connect** (`adb reverse` maps emulator localhost → your PC Metro).
-4. Leave the Metro terminal running; do not stop it after “Android Bundled”.
-
-Useful follow-ups (JS-only, APK already installed):
+1. Emulator opens **Smart Package Hub Development Build** (Dev Launcher).
+2. Allow permission prompts if shown.
+3. If it does not auto-connect, use `http://localhost:8081` and tap **Connect**.
+4. For later JS-only reloads (APK already installed):
 
 ```bash
-npx expo start
-# then open the installed Smart Package Hub app / Dev Launcher and Connect
+npm run start:dev
+# same as: npx expo start --dev-client
 ```
 
-Reset Metro cache if the bundle looks stale:
+| Goal | Command | URL / app |
+|------|---------|-----------|
+| Phone + Expo Go | `npm run start:go` | Scan `exp://…` in Expo Go |
+| Emulator + Expo Go | `npm run start:go` then `a` | Expo Go |
+| Emulator + OCR / ML Kit | `npm run android` or `npm run start:dev` | Dev client (`exp+smartpackagehubmobile://`) |
 
-```bash
-npx expo start -c
-```
+You normally pick **one** Metro mode at a time (`--go` **or** `--dev-client`). Reset cache with `npx expo start -c` if the bundle looks stale.
 
 ### C) iOS Simulator (macOS only)
 

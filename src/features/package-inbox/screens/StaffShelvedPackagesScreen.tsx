@@ -21,6 +21,7 @@ import { useStaffReceive } from "@/features/package-inbox/hooks/useStaffReceive"
 import { getSocieties, type HubPackage } from "@/shared/services/packageApi";
 import { tokenStorage } from "@/shared/services/tokenStorage";
 import { colors } from "@/shared/theme/colors";
+import { SignOutButton } from "@/shared/ui/SignOutButton";
 import { formatUnitLabel } from "@/shared/utils/formatUnitLabel";
 
 export function StaffShelvedPackagesScreen() {
@@ -74,6 +75,7 @@ export function StaffShelvedPackagesScreen() {
       societyName={societyName}
       username={session.username}
       topInset={insets.top}
+      sideInset={Math.max(insets.left, insets.right, 0)}
       dispatchedIds={dispatchedIds}
       onDispatched={(pkg) => {
         setDispatchedIds((prev) => new Set([...prev, pkg.id]));
@@ -92,6 +94,7 @@ function StaffShelvedBody({
   societyName,
   username,
   topInset,
+  sideInset,
   dispatchedIds,
   onDispatched,
   onSignOut,
@@ -100,6 +103,7 @@ function StaffShelvedBody({
   societyName: string;
   username: string;
   topInset: number;
+  sideInset: number;
   dispatchedIds: Set<string>;
   onDispatched: (pkg: HubPackage) => void;
   onSignOut: () => Promise<void>;
@@ -128,8 +132,16 @@ function StaffShelvedBody({
 
   return (
     <View style={[styles.root, { paddingTop: topInset }]}>
-      <View style={styles.topBar}>
-        <View style={{ flex: 1, minWidth: 0 }}>
+      <View
+        style={[
+          styles.topBar,
+          {
+            paddingLeft: 12 + sideInset,
+            paddingRight: 12 + sideInset,
+          },
+        ]}
+      >
+        <View style={styles.topBarText}>
           <Text style={styles.society} numberOfLines={1}>
             {societyName}
           </Text>
@@ -137,9 +149,7 @@ function StaffShelvedBody({
             {username}
           </Text>
         </View>
-        <Pressable onPress={() => void onSignOut()} hitSlop={8}>
-          <Text style={styles.signOut}>Sign out</Text>
-        </Pressable>
+        <SignOutButton onPress={() => void onSignOut()} />
       </View>
 
       <View style={styles.header}>
@@ -266,16 +276,15 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   topBar: {
     backgroundColor: colors.primary,
-    paddingHorizontal: 12,
     paddingVertical: 10,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 8,
+    gap: 12,
   },
+  topBarText: { flex: 1, flexShrink: 1, minWidth: 0, paddingRight: 8 },
   society: { color: "#fff", fontSize: 12, fontWeight: "700" },
   user: { color: "rgba(255,255,255,0.7)", fontSize: 10, marginTop: 1 },
-  signOut: { color: "rgba(255,255,255,0.8)", fontSize: 11, fontWeight: "600" },
   header: {
     backgroundColor: colors.primary,
     paddingHorizontal: 20,
@@ -283,7 +292,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: { color: "#fff", fontSize: 16, fontWeight: "800" },
   headerSub: { color: "rgba(255,255,255,0.5)", fontSize: 12, marginTop: 4 },
-  list: { padding: 16, paddingBottom: 28 },
+  list: { padding: 16, paddingBottom: 40 },
   countLabel: {
     fontSize: 11,
     fontWeight: "800",

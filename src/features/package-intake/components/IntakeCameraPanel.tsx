@@ -20,12 +20,14 @@ import type { RefObject } from "react";
 type Props = {
   cameraRef: RefObject<CameraView | null>;
   cameraOn: boolean;
+  cameraEpoch?: number;
   scanningEnabled: boolean;
   reading: boolean;
   status: string;
   confidence: number | null;
   photoState: string | null;
   onBarcodeScanned: (result: BarcodeScanningResult) => void;
+  onCameraReady?: () => void;
   onRequestPermission?: () => void;
   style?: StyleProp<ViewStyle>;
 };
@@ -33,12 +35,14 @@ type Props = {
 export function IntakeCameraPanel({
   cameraRef,
   cameraOn,
+  cameraEpoch = 0,
   scanningEnabled,
   reading,
   status,
   confidence,
   photoState,
   onBarcodeScanned,
+  onCameraReady,
 }: Props) {
   const [permission, requestPermission] = useCameraPermissions();
 
@@ -75,6 +79,7 @@ export function IntakeCameraPanel({
       <View style={styles.shell}>
         {cameraOn ? (
           <CameraView
+            key={`intake-camera-${cameraEpoch}`}
             ref={cameraRef}
             style={StyleSheet.absoluteFill}
             facing="back"
@@ -82,11 +87,13 @@ export function IntakeCameraPanel({
             barcodeScannerSettings={{
               barcodeTypes: [...BARCODE_TYPES],
             }}
+            onCameraReady={onCameraReady}
             onBarcodeScanned={scanningEnabled ? onBarcodeScanned : undefined}
           />
         ) : (
           <View style={styles.stopped}>
             <Text style={styles.stoppedText}>Camera stopped</Text>
+            <Text style={styles.stoppedHint}>Tap Clear / restart scan to open camera</Text>
           </View>
         )}
         <View style={styles.reticle} pointerEvents="none" />
@@ -140,8 +147,14 @@ const styles = StyleSheet.create({
   },
   warn: { marginTop: 4, fontSize: 11, color: "#B45309", fontWeight: "600" },
   meta: { marginTop: 2, fontSize: 11, color: colors.textMuted },
-  stopped: { alignItems: "center", justifyContent: "center" },
+  stopped: { alignItems: "center", justifyContent: "center", paddingHorizontal: 20 },
   stoppedText: { color: "rgba(255,255,255,0.7)", fontSize: 13 },
+  stoppedHint: {
+    marginTop: 6,
+    color: "rgba(255,255,255,0.45)",
+    fontSize: 11,
+    textAlign: "center",
+  },
   permTitle: { color: "#fff", fontSize: 14, fontWeight: "700", marginBottom: 6 },
   permBody: {
     color: "rgba(255,255,255,0.7)",
