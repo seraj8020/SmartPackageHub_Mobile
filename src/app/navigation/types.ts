@@ -1,3 +1,5 @@
+import type { HubPackage } from "@/shared/services/packageApi";
+
 export type RootStackParamList = {
   Launch: undefined;
   ResidentLogin: undefined;
@@ -5,6 +7,11 @@ export type RootStackParamList = {
   StaffLogin: undefined;
   ResidentApp: undefined;
   StaffApp: undefined;
+};
+
+export type ResidentStackParamList = {
+  ResidentTabs: undefined;
+  DeliveryPreference: { pkg: HubPackage };
 };
 
 export type ResidentTabParamList = {

@@ -1,4 +1,4 @@
-import { API, authHeaders } from "@/shared/services/apiClient";
+import { API } from "@/shared/services/apiClient";
 import type {
   RegisteredResident,
   RegisterResidentRequest,
@@ -17,13 +17,15 @@ export async function registerResident(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       societyId: request.societyId,
+      // Empty GUID = self-registration; API creates the linked Resident user.
       userId: "00000000-0000-0000-0000-000000000000",
       fullname: request.fullName,
       phoneNo: request.phoneNumber,
       towerWing: request.towerWing,
+      flatnumber: request.flatNumber,
       flatNumber: request.flatNumber,
       isMember: true,
-      picUrl: "",
+      picUrl: null,
       isActive: true,
     }),
   });
@@ -87,9 +89,10 @@ export async function verifyResidentLoginOtp(
   phoneNumber: string,
   otp: string,
 ): Promise<ResidentLoginSession> {
+  // Do not send a leftover staff/admin Bearer — OTP verify is public.
   const response = await fetch(`${API}/auth/resident/otp/verify`, {
     method: "POST",
-    headers: await authHeaders(),
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ phoneNumber, otp }),
   });
 
@@ -106,28 +109,29 @@ export async function verifyResidentLoginOtp(
     );
   }
 
-  const body = (await response.json()) as {
-    token?: string;
-    Token?: string;
-    accessToken?: string;
-    residentId?: string;
-    ResidentId?: string;
-    societyId?: string;
-    SocietyId?: string;
-    fullName?: string;
-    FullName?: string;
-    phoneNumber?: string;
-    PhoneNumber?: string;
-    towerWing?: string;
-    TowerWing?: string;
-    flatNumber?: string;
-    FlatNumber?: string;
-    resident?: { id?: string; societyId?: string };
+  const body = (await response.json()) as Record<string, unknown>;
+  const text = (...keys: string[]) => {
+    for (const key of keys) {
+      const value = body[key];
+      if (typeof value === "string" && value.trim()) return value.trim();
+      if (typeof value === "number" || typeof value === "boolean") return String(value);
+    }
+    return "";
+  };
+  const nested = (body.resident ?? body.Resident) as Record<string, unknown> | undefined;
+  const nestedText = (...keys: string[]) => {
+    if (!nested) return "";
+    for (const key of keys) {
+      const value = nested[key];
+      if (typeof value === "string" && value.trim()) return value.trim();
+    }
+    return "";
   };
 
-  const token = body.token ?? body.Token ?? body.accessToken;
-  const residentId = body.residentId ?? body.ResidentId ?? body.resident?.id;
-  const societyId = body.societyId ?? body.SocietyId ?? body.resident?.societyId;
+  const token = text("token", "Token", "accessToken");
+  const residentId = text("residentId", "ResidentId") || nestedText("id", "Id");
+  const societyId =
+    text("societyId", "SocietyId") || nestedText("societyId", "SocietyId");
   if (!token || !residentId || !societyId) {
     throw new Error("The sign-in response is incomplete. Please try again.");
   }
@@ -136,9 +140,9 @@ export async function verifyResidentLoginOtp(
     token,
     residentId,
     societyId,
-    fullName: body.fullName ?? body.FullName,
-    phoneNumber: body.phoneNumber ?? body.PhoneNumber ?? phoneNumber,
-    towerWing: body.towerWing ?? body.TowerWing,
-    flatNumber: body.flatNumber ?? body.FlatNumber,
+    fullName: text("fullName", "FullName") || undefined,
+    phoneNumber: text("phoneNumber", "PhoneNumber") || phoneNumber,
+    towerWing: text("towerWing", "TowerWing") || undefined,
+    flatNumber: text("flatNumber", "FlatNumber") || undefined,
   };
 }

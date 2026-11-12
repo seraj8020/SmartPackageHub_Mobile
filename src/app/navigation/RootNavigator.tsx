@@ -1,7 +1,7 @@
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "@/app/navigation/types";
-import { ResidentTabNavigator } from "@/app/navigation/ResidentTabNavigator";
+import { ResidentStackNavigator } from "@/app/navigation/ResidentStackNavigator";
 import { StaffTabNavigator } from "@/app/navigation/StaffTabNavigator";
 import { LaunchScreen } from "@/features/authentication/screens/LaunchScreen";
 import { ResidentOtpLoginScreen } from "@/features/authentication/screens/ResidentOtpLoginScreen";
@@ -45,7 +45,7 @@ export function RootNavigator() {
         />
         <Stack.Screen
           name="ResidentApp"
-          component={ResidentTabNavigator}
+          component={ResidentStackNavigator}
           options={{ headerShown: false }}
         />
         <Stack.Screen

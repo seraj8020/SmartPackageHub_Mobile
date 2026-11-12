@@ -35,11 +35,11 @@ export function PackageDetailsPanel(props: Props) {
           <Field label="Category" value={props.category} onChange={props.onCategoryChange} />
           <View style={styles.row}>
             <HalfField label="Weight kg" value={props.weight} onChange={props.onWeightChange} keyboardType="decimal-pad" />
-            <HalfField label="L cm" value={props.length} onChange={props.onLengthChange} keyboardType="decimal-pad" />
+            <HalfField label="Length cm" value={props.length} onChange={props.onLengthChange} keyboardType="decimal-pad" />
           </View>
           <View style={styles.row}>
-            <HalfField label="W cm" value={props.width} onChange={props.onWidthChange} keyboardType="decimal-pad" />
-            <HalfField label="H cm" value={props.height} onChange={props.onHeightChange} keyboardType="decimal-pad" />
+            <HalfField label="Width cm" value={props.width} onChange={props.onWidthChange} keyboardType="decimal-pad" />
+            <HalfField label="Height cm" value={props.height} onChange={props.onHeightChange} keyboardType="decimal-pad" />
           </View>
           <View style={styles.switchRow}>
             <Text style={styles.switchLabel}>Cold storage</Text>
