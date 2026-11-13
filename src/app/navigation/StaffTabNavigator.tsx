@@ -9,6 +9,7 @@ import { StaffReceivedPackagesScreen } from "@/features/package-inbox/screens/St
 import { StaffShelvedPackagesScreen } from "@/features/package-inbox/screens/StaffShelvedPackagesScreen";
 import { StaffScanScreen } from "@/features/package-intake/screens/StaffScanScreen";
 import { StaffTabPlaceholderScreen } from "@/features/package-intake/screens/StaffTabPlaceholderScreen";
+import { RunnerRouteScreen } from "@/features/package-handover/screens/RunnerRouteScreen";
 
 const Tab = createBottomTabNavigator<StaffTabParamList>();
 
@@ -80,12 +81,7 @@ export function StaffTabNavigator() {
           ),
         }}
       >
-        {() => (
-          <Placeholder
-            title="Route"
-            body="Tower runner route (same Route tab as web)."
-          />
-        )}
+        {() => <RunnerRouteScreen />}
       </Tab.Screen>
       <Tab.Screen
         name="Hand"
