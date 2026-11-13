@@ -242,10 +242,15 @@ export async function uploadDamagePhoto(
   imageBase64: string,
   note?: string,
 ): Promise<void> {
+  // Camera preview stores a data URL; API expects raw base64 only.
+  const marker = "base64,";
+  const markerIndex = imageBase64.indexOf(marker);
+  const payload =
+    markerIndex >= 0 ? imageBase64.slice(markerIndex + marker.length) : imageBase64;
   const response = await fetch(`${API}/intake/${intakeId}/damage`, {
     method: "POST",
     headers: await authHeaders(),
-    body: JSON.stringify({ imageBase64, note }),
+    body: JSON.stringify({ imageBase64: payload, note }),
   });
   if (!response.ok) await readError(response, `Damage photo failed (${response.status})`);
 }
