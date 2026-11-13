@@ -57,7 +57,7 @@ export function ReceivedIntakeCard({
         <View style={styles.info}>
           <Text style={styles.infoText}>
             {offline
-              ? "Continue scanning. Pending intakes flush via POST /api/v2/intake/batch-intake with the same clientRequestId."
+              ? "Continue scanning. This package is saved on the phone and will sync to the hub automatically."
               : "Courier can leave. Assign a shelf from the Inbox tab when ready."}
           </Text>
         </View>

@@ -129,6 +129,40 @@ export async function listDueIntake(limit = 10): Promise<QueuedIntakeRow[]> {
   return rows.map(mapRow);
 }
 
+/** Recover rows left in `syncing` after a killed flush, and optionally ignore backoff. */
+export async function prepareIntakeQueueForFlush(force = false): Promise<void> {
+  const db = await getDb();
+  const now = Date.now();
+  // Stuck mid-flush would stay counted in the banner but never selected by listDueIntake.
+  await db.runAsync(
+    `UPDATE intake_queue
+     SET status = 'pending', updated_at = ?
+     WHERE status = 'syncing'`,
+    now,
+  );
+  if (force) {
+    await db.runAsync(
+      `UPDATE intake_queue
+       SET next_attempt_at = 0, updated_at = ?
+       WHERE status IN ('pending', 'failed')`,
+      now,
+    );
+  }
+}
+
+export async function getLatestIntakeQueueError(): Promise<string | null> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ last_error: string | null }>(
+    `SELECT last_error FROM intake_queue
+     WHERE status IN ('pending', 'failed', 'syncing')
+       AND last_error IS NOT NULL
+       AND trim(last_error) != ''
+     ORDER BY updated_at DESC
+     LIMIT 1`,
+  );
+  return row?.last_error?.trim() || null;
+}
+
 export async function markIntakeSyncing(id: string): Promise<void> {
   const db = await getDb();
   await db.runAsync(

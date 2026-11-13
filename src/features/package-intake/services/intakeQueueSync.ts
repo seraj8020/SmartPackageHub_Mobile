@@ -6,10 +6,12 @@ import {
 } from "@/features/package-intake/services/intakeApi";
 import {
   countPendingIntake,
+  getLatestIntakeQueueError,
   listDueIntake,
   markIntakeFailed,
   markIntakeSynced,
   markIntakeSyncing,
+  prepareIntakeQueueForFlush,
   purgeSyncedOlderThan,
 } from "@/features/package-intake/services/intakeQueueDb";
 
@@ -33,19 +35,38 @@ export function subscribeIntakeQueue(listener: SyncListener): () => void {
   };
 }
 
-export async function flushIntakeQueue(): Promise<void> {
-  if (flushing) return;
+export async function flushIntakeQueue(options?: { force?: boolean }): Promise<{
+  pending: number;
+  lastError: string | null;
+}> {
+  const force = Boolean(options?.force);
+  if (flushing) {
+    return {
+      pending: await countPendingIntake(),
+      lastError: await getLatestIntakeQueueError(),
+    };
+  }
+
   const net = await NetInfo.fetch();
   if (!net.isConnected) {
     await notify();
-    return;
+    return {
+      pending: await countPendingIntake(),
+      lastError: "Phone is offline",
+    };
   }
 
   flushing = true;
   try {
+    await prepareIntakeQueueForFlush(force);
     await purgeSyncedOlderThan();
     const due = await listDueIntake(20);
-    if (due.length === 0) return;
+    if (due.length === 0) {
+      return {
+        pending: await countPendingIntake(),
+        lastError: await getLatestIntakeQueueError(),
+      };
+    }
 
     for (const row of due) {
       await markIntakeSyncing(row.id);
@@ -76,7 +97,6 @@ export async function flushIntakeQueue(): Promise<void> {
           continue;
         }
 
-        // Permanent client errors (validation / not found) — still backoff so staff can fix later.
         const message = result?.error ?? `Batch item failed (${result?.statusCode ?? 0})`;
         await markIntakeFailed(item.id, item.attempts + 1, message);
       }
@@ -92,7 +112,14 @@ export async function flushIntakeQueue(): Promise<void> {
         }
       }
     }
+
+    return {
+      pending: await countPendingIntake(),
+      lastError: await getLatestIntakeQueueError(),
+    };
   } finally {
+    // Never leave rows stuck in syncing if flush aborts mid-way.
+    await prepareIntakeQueueForFlush(false);
     flushing = false;
     await notify();
   }
@@ -108,7 +135,7 @@ export function startIntakeQueueSync(): void {
     }
   });
 
-  void flushIntakeQueue();
+  void flushIntakeQueue({ force: true });
   // Periodic sweep so backoff windows eventually fire while app is open.
   setInterval(() => {
     void flushIntakeQueue();

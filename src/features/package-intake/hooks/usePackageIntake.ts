@@ -80,6 +80,12 @@ export function usePackageIntake(options: {
     };
   }, [loginName]);
 
+  // OCR often misses tower/flat on rotated Meesho labels — backfill from a firm name match.
+  useEffect(() => {
+    if (matching.match.status !== "matched" || !matching.selected) return;
+    scanner.hydrateEmptyFieldsFromResident(matching.selected);
+  }, [matching.match.status, matching.selected, scanner.hydrateEmptyFieldsFromResident]);
+
   function chooseResident(resident: ResidentMatch) {
     matching.selectResident(resident);
     scanner.applyResidentFields(resident);
@@ -179,15 +185,21 @@ export function usePackageIntake(options: {
             });
         }
       } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        const networkFlake =
+          /network request failed|failed to fetch|timed?\s*out|ECONNREFUSED|ENOTFOUND|unreachable|offline/i.test(
+            message,
+          );
+        if (!networkFlake) {
+          // Hub rejected the intake (validation, duplicate AWB, auth, etc.) — do not fake offline.
+          scanner.setError(message || "Could not confirm intake");
+          return;
+        }
         // Network flake mid-request → queue with same clientRequestId (idempotent).
         const queued = await enqueueIntake(payload);
         scanner.stopCamera();
         setReceipt(queued);
-        scanner.setError(
-          err instanceof Error
-            ? `Saved offline · ${err.message}`
-            : "Saved offline · will sync when online",
-        );
+        scanner.setError(`Saved offline · ${message}`);
         void flushIntakeQueue();
       }
     } catch (err) {
