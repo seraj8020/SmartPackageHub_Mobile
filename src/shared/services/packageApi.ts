@@ -45,6 +45,12 @@ export interface PackageStatusUpdateResponse {
   message?: string;
 }
 
+export interface StartTowerRouteResponse {
+  message: string;
+  dispatchedCount: number;
+  packageIds: string[];
+}
+
 function textOf(row: Record<string, unknown>, ...keys: string[]): string {
   for (const key of keys) {
     const value = row[key];
@@ -180,4 +186,37 @@ export async function dispatchPackage(
     throw new Error(message ?? "Package dispatch failed.");
   }
   return { success: true, packageId, message };
+}
+
+export async function startTowerRoute(
+  societyId: string,
+  towerWing: string,
+  floor?: number | null,
+): Promise<StartTowerRouteResponse> {
+  const response = await fetch(
+    `${API}/societies/${encodeURIComponent(societyId)}/tower-route/start`,
+    {
+      method: "POST",
+      headers: await authHeaders(),
+      body: JSON.stringify({ towerWing, floor: floor ?? null }),
+    },
+  );
+  const body = (await response.json().catch(() => ({}))) as {
+    message?: string;
+    Message?: string;
+    dispatchedCount?: number;
+    DispatchedCount?: number;
+    packageIds?: string[];
+    PackageIds?: string[];
+  };
+  const message = body.message ?? body.Message;
+  if (!response.ok) {
+    throw new Error(message ?? `Unable to start tower route (${response.status})`);
+  }
+  const packageIds = (body.packageIds ?? body.PackageIds ?? []).map(String);
+  return {
+    message: message ?? "Route started.",
+    dispatchedCount: body.dispatchedCount ?? body.DispatchedCount ?? packageIds.length,
+    packageIds,
+  };
 }
