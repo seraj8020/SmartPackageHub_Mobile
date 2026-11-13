@@ -98,10 +98,11 @@ export function usePackageIntake(options: {
       return;
     }
     try {
+      // skipProcessing:false so quality compression applies (otherwise full-res phone JPEGs exceed API limits).
       const photo = await camera.takePictureAsync({
-        quality: 0.6,
+        quality: 0.35,
         base64: true,
-        skipProcessing: true,
+        skipProcessing: false,
         shutterSound: false,
       });
       if (!photo?.base64) {
