@@ -6,6 +6,7 @@ export type ShelfPickerOption = {
   id: string;
   code: string;
   row: string;
+  towerOrWing?: string;
   capacity: number;
   packageCount: number;
   remaining: number;
@@ -38,6 +39,7 @@ export function toShelfPickerOption(shelf: ShelfInventoryItem): ShelfPickerOptio
     id: shelf.id,
     code: shelf.code,
     row: rowFromShelfCode(shelf.code),
+    towerOrWing: shelf.towerOrWing,
     capacity,
     packageCount,
     remaining,

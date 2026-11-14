@@ -9,6 +9,7 @@ export interface ShelfPackage {
 export interface ShelfInventoryItem {
   id: string;
   code: string;
+  towerOrWing?: string;
   capacity: number;
   packageCount: number;
   isFull: boolean;

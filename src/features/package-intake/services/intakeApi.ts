@@ -202,9 +202,16 @@ export async function batchConfirmIntake(
   };
 }
 
-export async function suggestShelf(societyId?: string): Promise<{ shelfCode: string }> {
+export async function suggestShelf(
+  societyId?: string,
+  options?: { towerOrWing?: string | null; isColdStorage?: boolean },
+): Promise<{ shelfCode: string }> {
   const params = new URLSearchParams();
   if (societyId) params.set("societyId", societyId);
+  if (options?.towerOrWing?.trim()) params.set("towerOrWing", options.towerOrWing.trim());
+  if (options?.isColdStorage != null) {
+    params.set("isColdStorage", String(options.isColdStorage));
+  }
   const query = params.toString();
   const response = await fetch(`${API}/intake/shelf${query ? `?${query}` : ""}`, {
     headers: await authHeaders(),

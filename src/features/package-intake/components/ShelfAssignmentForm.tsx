@@ -81,7 +81,9 @@ export function ShelfAssignmentForm({
         </View>
       ) : options.length === 0 ? (
         <Text style={styles.muted}>
-          No {storageFilter === "cold" ? "cold" : "ambient"} shelves available.
+          {storageFilter === "cold"
+            ? "No cold shelves configured for this society."
+            : "No ambient shelves for this resident's tower. Configure matching shelves in Admin → Shelves."}
         </Text>
       ) : (
         <>

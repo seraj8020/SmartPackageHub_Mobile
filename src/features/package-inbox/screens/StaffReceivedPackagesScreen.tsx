@@ -190,10 +190,10 @@ function StaffReceivedBody({
   function openAssignFor(pkg: HubPackage) {
     setError(null);
     const preferCold = Boolean(pkg.isColdStorage);
+    const tower = pkg.tower ?? pkg.towerWing;
+    shelfPicker.preferTower(tower);
     shelfPicker.preferStorage(preferCold);
-    const pool = shelfPicker.options.filter((item) =>
-      preferCold ? item.isColdStorage : !item.isColdStorage,
-    );
+    const pool = shelfPicker.optionsForPackage(tower, preferCold);
     const openShelf =
       pool.find(
         (item) =>
@@ -204,8 +204,25 @@ function StaffReceivedBody({
     if (openShelf) {
       setShelf(openShelf.code);
       setRow(openShelf.row);
+    } else {
+      setShelf("");
+      setRow("");
     }
-    setSelectedId((current) => (current === pkg.id ? null : pkg.id));
+    setSelectedId((current) => {
+      if (current === pkg.id) {
+        shelfPicker.preferTower(undefined);
+        return null;
+      }
+      void suggestShelf(societyId, { towerOrWing: tower, isColdStorage: preferCold })
+        .then((result) => {
+          if (!result.shelfCode) return;
+          setSuggested(result.shelfCode);
+          setShelf(result.shelfCode);
+          setRow(rowFromShelfCode(result.shelfCode));
+        })
+        .catch(() => undefined);
+      return pkg.id;
+    });
   }
 
   async function handleAssignShelf(pkg: HubPackage) {
