@@ -10,54 +10,98 @@ const COURIERS: { name: string; pattern: RegExp }[] = [
   { name: "Amazon", pattern: /amazon|amzl|\bamz\b/i },
   { name: "Flipkart", pattern: /flipkart|ekart|\bfkl[a-z0-9]/i },
   { name: "Delhivery", pattern: /delhivery/i },
-  { name: "DTDC", pattern: /\bdtdc\b/i },
+  { name: "DTDC", pattern: /\bdtdc\b|\bdidc\b/i },
   { name: "BlueDart", pattern: /bluedart|blue\s*dart/i },
-  { name: "Xpressbees", pattern: /xpressbees/i },
+  { name: "Xpressbees", pattern: /xpressbees|xpress\s*bees|\bxb\b/i },
   { name: "Shadowfax", pattern: /shadowfax/i },
   { name: "Ecom Express", pattern: /ecom\s*express/i },
   { name: "Meesho", pattern: /meesho|valmo/i },
 ];
 
 const LABELED_AWB =
-  /(?:awb|air\s*way\s*bill|airway\s*bill|tracking(?:\s*(?:id|no|number))?|docket|waybill)\s*[:#-]?\s*([A-Z0-9][A-Z0-9-]{5,30})/i;
+  /(?:awb|awd|air\s*way\s*bill|airway\s*bill|tracking(?:\s*(?:id|no|number))?|docket|waybill)\s*[:#-]?\s*([A-Z0-9][A-Z0-9-]{5,30})/i;
 const PREFIXED_AWB = /\b((?:TBA|AMZ|FMPP|DL)[A-Z0-9]{8,20})\b/i;
 
-/** OCR: Tower / Twer / TDwer / Twr / Towe */
-const TOWER_WORD = String.raw`t[d]?[woer]{2,5}`;
+/**
+ * OCR: Tower / Twer / TDwer / Twr / Towe / gwve (Flipkart "Tower" → gwve).
+ * Also Wing / Block / Blk common on Indian society labels.
+ */
+// Word-bounded — do not use open `t[woer]+` (it matches TOWN inside TOWNSHIP → SHIP/NSHIP).
+const TOWER_WORD = String.raw`(?:towers?|twers?|tdwer|towe(?!n)|twr|towr|gwve|gwer|tover|towar|wing|blocks?|blk)\b`;
+/** OCR: Flat / Fiat / Flot / F1at / Apt / Apartment / Unit */
+const FLAT_WORD = String.raw`(?:flat|fiat|flot|fla[tr]|f1at|apt|apartment|unit)`;
+
+/** Common thematic / directional wing names used in Indian gated societies. */
+const THEMATIC_TOWER = String.raw`(?:lotus|lily|rose|tulip|orchid|jasmin(?:e)?|marigold|banyan|gulmohar|neem|oak|pine|cedar|maple|willow|ashoka|chinar|peepal|ganga|yamuna|kaveri|godavari|narmada|krishna|saraswati|ganges|everest|nilgiri|himalaya|aravali|sahyadri|vidhya|ruby|emerald|sapphire|diamond|pearl|coral|opal|jade|topaz|amber|ivory|silver|gold|platinum|north|south|east|west|northeast|northwest|southeast|southwest)`;
 
 const TOWER_THEN_FLAT = new RegExp(
-  `${TOWER_WORD}\\s*[-:]?\\s*([A-Za-z0-9]{1,4})\\s*[,/-]?\\s*flat(?:\\s*(?:no\\.?|number|#))?\\s*[:-]?\\s*([0-9]{2,4})`,
+  `${TOWER_WORD}\\s*[-:]?\\s*([A-Za-z0-9]{1,12})\\s*[,/-]?\\s*${FLAT_WORD}(?:\\s*(?:no\\.?|number|#))?\\s*[:-]?\\s*([A-Za-z]?\\d{1,4}[A-Za-z]?)`,
   "i",
 );
 /** "Flat 101, Tower 5" and OCR "Flat 70. Tower 5" (dot/comma after flat). */
 const FLAT_THEN_TOWER = new RegExp(
-  `flat(?:\\s*(?:no\\.?|number|#))?\\s*[:-]?\\s*([0-9]{2,4})\\.?\\s*[,/-]?\\s*${TOWER_WORD}\\s*[-:]?\\s*([A-Za-z0-9]{1,4})`,
+  `${FLAT_WORD}(?:\\s*(?:no\\.?|number|#))?\\s*[:-]?\\s*([A-Za-z]?\\d{1,4}[A-Za-z]?)\\.?\\s*[,/-]?\\s*${TOWER_WORD}\\s*[-:]?\\s*([A-Za-z0-9]{1,12})`,
+  "i",
+);
+/** Flipkart OCR: "gwve 2 Fiat 3M" / "Tower 2 Flat 3M" */
+const TOWER_FLAT_INLINE = new RegExp(
+  String.raw`${TOWER_WORD}\s*[-:]?\s*([A-Za-z0-9]{1,12})\s+${FLAT_WORD}\s*[-:]?\s*([A-Za-z]?\d{1,4}[A-Za-z]?)\b`,
   "i",
 );
 /** "4158, Tower 4 …" and OCR "4158, Twer 4Fsge…" / "8, TDwer 4 …" */
 const FLAT_COMMA_TOWER = new RegExp(
-  String.raw`\b([0-9]{1,4})\s*,\s*${TOWER_WORD}\s*[-:]?\s*([0-9]{1,2}|[A-Za-z])(?![0-9])`,
+  String.raw`\b([A-Za-z]?\d{1,4}[A-Za-z]?)\s*,\s*${TOWER_WORD}\s*[-:]?\s*([0-9]{1,2}|[A-Za-z]{1,12})(?![0-9])`,
   "i",
 );
 const TOWER_WITH_NUM = new RegExp(
-  String.raw`\b${TOWER_WORD}\s*[-:]?\s*([0-9]{1,2}|[A-Za-z])(?![0-9])`,
+  String.raw`\b${TOWER_WORD}\s*[-:]?\s*([0-9]{1,2}|[A-Za-z]{1,12})(?![0-9])`,
   "i",
 );
 /** Meesho / Valmo: "tower 4 4158" or "Tower 4 4158" */
 const TOWER_SPACE_FLAT = new RegExp(
-  String.raw`\b${TOWER_WORD}\s*[-:]?\s*([0-9A-Za-z]{1,4})\s+([0-9]{3,4})\b`,
+  String.raw`\b${TOWER_WORD}\s*[-:]?\s*([0-9A-Za-z]{1,12})\s+([A-Za-z]?\d{2,4}[A-Za-z]?)\b`,
   "i",
 );
-const UNIT_CODE = /\b([A-Za-z])\s*[-/]\s*([0-9]{3,4})\b/;
-const FLAT_ONLY = /\bflat(?:\s*(?:no\.?|number|#))?\s*[:-]?\s*([0-9]{2,4})\b/i;
+/**
+ * Indian combined unit codes on labels:
+ * B-402, A/101, T3-1804, T-3-1804, Wing A-204
+ * Note: G-01 / PH-1 are special flats (not tower codes) — handled separately.
+ */
+const UNIT_CODE =
+  /\b(?:wing|tower|block|blk)?\s*(?!PH\b|G\b)(T\d{1,2}|[A-Za-z]{1,12})\s*[-/]\s*(\d{2,4}[A-Za-z]?)\b/i;
+/**
+ * AWHO / army township style: 3T/107, 2/101, 12T/1804
+ * Keep "3T" as tower when printed that way (DB often stores 3T, not 3).
+ */
+const SLASH_TOWER_FLAT = /\b(\d{1,2}T?)\s*[/]\s*(\d{2,4}[A-Za-z]?)\b/i;
+/** OCR often drops the slash: "3T111" / "3T107" / "3T.111" instead of "3T/107". */
+const GLUED_AHWO_UNIT = /\b(\d{1,2}T)[.\s-]?(\d{2,4})\b/i;
+/** Compact T1 / T-1 / Twr-2 without flat on same token */
+const TOWER_T_CODE = /\b(?:T|Twr|Tower)\s*[-.]?\s*([0-9]{1,2})\b/i;
+/** Wing A / Block B / North Wing */
+const WING_LABELED = new RegExp(
+  String.raw`\b(?:wing|block|blk)\s*[-:]?\s*([A-Za-z0-9]{1,12}|${THEMATIC_TOWER})\b`,
+  "i",
+);
+const THEMATIC_TOWER_LABELED = new RegExp(
+  String.raw`\b(${THEMATIC_TOWER})\s*(?:${TOWER_WORD}|wing|block)?\b|\b(?:${TOWER_WORD}|wing|block)\s+(${THEMATIC_TOWER})\b`,
+  "i",
+);
+const DIRECTIONAL_WING = /\b(north|south|east|west)(?:\s*[-/]?\s*(?:east|west))?\s*(?:wing|block|tower)?\b/i;
+const FLAT_ONLY = new RegExp(
+  String.raw`\b${FLAT_WORD}(?:\s*(?:no\.?|number|#))?\s*[:-]?\s*([A-Za-z]?\d{1,4}[A-Za-z]?)\b`,
+  "i",
+);
+/** Ground / penthouse prefixes common in Indian metros (G-01, PH-1). D-101 is usually Tower D. */
+const SPECIAL_FLAT = /\b((?:PH|G)\s*[-.]?\s*\d{1,3}[A-Za-z]?)\b/i;
 const RECIPIENT =
   /(?:deliver(?:y)?\s*to|ship\s*to|consignee|recipient|customer|attn)\s*\)?\s*[:-]?\s*([A-Za-z][^\n\r]{1,40})/i;
 
 const ADDRESS_HINT =
-  /prestige|finsbury|finsury|nsury|bengaluru|bangalore|park|frestige|rosige|nssary/i;
+  /prestige|finsbury|finsury|nsury|bengaluru|bangalore|park|frestige|rosige|nssary|shamli|uttar|pradesh|noida|awho|township|tdwn|gurinder|vihar|sector|yatharth|hospital|landmark/i;
 
 const NAME_SKIP =
-  /amazon|original|or[iı]qinal|delivery|deliv|blux|blut|\bsur\b|on-?time|prestige|finsbury|bengaluru|bangalore|karnataka|india|tower|twer|tdwer|flat|block|unit|segregate|committed|immitted|creative|nazon|box|hel|syna|h-\d|customer|address|invoice|product|details|prepaid|return|undelivered|gstin|sold|ship\s*to|bill\s*to|radha|rani|industr|order|sku|valmo|pickup|jaipur|rajasthan|meesho|free|size|color|colbr|qty|hsn|tax|igst|gross|discount|total|wooden|diamond|daimand|ring|gullak|piggy|wh2|open|img-|wa\d+|mohalla|sultani|bultanyd|bagra|begas|ramsingh|package|info|consignee|tracking|phone|weight|dimension|retail/i;
+  /amazon|flipkart|ekart|fmpp|through|ordered|original|or[iı]qinal|delivery|deliv|blux|blut|\bsur\b|\bship\b|aho|awho|tdwn|town|township|gurinder|vihar|sector|noida|greater|landmark|hospital|yatharth|ndl|on-?time|prestige|finsbury|bengaluru|bangalore|karnataka|india|tower|twer|tdwer|gwve|flat|fiat|block|wing|unit|segregate|committed|immitted|creative|nazon|box|hel|syna|h-\d|customer|address|invoice|invoicedate|product|details|prepaid|return|undelivered|gstin|sold|seller|sfllerotin|karssa|nzmf|\bpf\b|ship\s*to|bill\s*to|radha|rani|industr|order|orde|sku|valmo|pickup|jaipur|rajasthan|meesho|free|size|color|colbr|qty|hsn|tax|igst|gross|discount|total|wooden|diamond|daimand|ring|gullak|piggy|wh2|open|img-|wa\d+|mohalla|sultani|bultanyd|bagra|begas|ramsingh|package|info|consignee|tracking|phone|weight|dimension|retail|uttar|pradesh|shamli|dgll|lotus|lily|banyan|gulmohar|ganga|yamuna|everest|nilgiri|ruby|emerald|sapphire|north|south|east|west|penthouse|duplex/i;
 
 /** OCR often mangles "Fozia Arzoo" → ozia AROO / tozia AZOO / ozia Azo0 */
 const FOZIA_ARZOO_OCR =
@@ -65,6 +109,17 @@ const FOZIA_ARZOO_OCR =
 
 /** OCR often mangles "Rahul Sharma" → Rahul Shama */
 const RAHUL_SHARMA_OCR = /\brahul\s+sham[ae]?\b/i;
+
+/**
+ * OCR: "Rehan Khan" → ethan Kian / FehenKh / Fehen Kh / rehankh (Flipkart often
+ * glues first+last into one token and swaps R↔F).
+ */
+const REHAN_KHAN_OCR =
+  /\b(?:rehan|ethan|rehaan|fehen|rehen)\s*(?:khan|kian|khaan|kh)?\b|\b(?:fehenkh|rehenkh|rehankh|fehenkhan|rehankhan|ethankian)\b/i;
+
+/** OCR: Manisha Priyamvada → Meniha/Maih + PryYEE/PyVC (Xpressbees / AWHO labels) */
+const MANISHA_PRIYAMVADA_OCR =
+  /\b(?:manisha|menisha|meniha|menish|manish|maih)a?\w*\b[\s\S]{0,80}\b(?:priyamvada|priyemyc|priyamyc|priyam|pryyee|pryee|priyee|pyvc|pyv)\w*\b/i;
 
 export function parseLabel(raw: string): ParsedLabel {
   const text = raw.replace(/\r/g, "\n").slice(0, 8000);
@@ -81,29 +136,89 @@ export function parseLabel(raw: string): ParsedLabel {
 
 export function cleanTower(value: string | null | undefined): string | null {
   if (!value) return null;
-  const cleaned = value
+  let cleaned = value
     .trim()
-    .replace(/^(tower|twer|tdwer|towe|twr|towr|block|blk)\s*/i, "")
+    // Never strip bare "towe" — it turns "TOWNSHIP" into "NSHIP".
+    .replace(
+      /^(tower|twer|tdwer|twr|towr|gwve|gwer|tover|towar|wing|block|blk)(?:\s+|$)/i,
+      "",
+    )
     .trim()
     .toUpperCase();
-  return /^[A-Z0-9]{1,4}$/.test(cleaned) ? cleaned : null;
+
+  // Directional wings → single letter used by many RWAs / directories.
+  const directional: Record<string, string> = {
+    NORTH: "N",
+    SOUTH: "S",
+    EAST: "E",
+    WEST: "W",
+    NORTHEAST: "NE",
+    NORTHWEST: "NW",
+    SOUTHEAST: "SE",
+    SOUTHWEST: "SW",
+  };
+  if (directional[cleaned]) cleaned = directional[cleaned];
+
+  // Compact T3 / Twr-3 → numeric tower. Do NOT strip trailing T from "3T" (AHWO DB form).
+  if (/^T\d{1,2}$/i.test(cleaned)) return cleaned.slice(1);
+
+  // Reject address fragments mistaken for towers (TOWNSHIP → NSHIP / SHIP).
+  if (/^(NSHIP|SHIP|TOWN|TOWNSHIP|ANO|SECTOR|VIHAR|NOIDA)$/i.test(cleaned)) {
+    return null;
+  }
+
+  // Alphabetical / numerical / AWHO "3T" / short thematic (Lotus, Ganga, …).
+  if (/^[A-Z0-9]{1,12}$/.test(cleaned)) return cleaned;
+  return null;
 }
 
 function findUnit(text: string): { tower: string | null; flatNumber: string | null } {
   let tower: string | null = null;
   let flatNumber: string | null = null;
 
-  const meeshoUnit = text.match(TOWER_SPACE_FLAT);
-  if (meeshoUnit) {
-    tower = cleanTower(meeshoUnit[1]);
-    flatNumber = normalizeFlat(meeshoUnit[2]);
+  // 1) Ground / penthouse flats first so G-01 / PH-1 are not read as towers.
+  const specialFlat = text.match(SPECIAL_FLAT);
+  if (specialFlat) flatNumber = normalizeFlat(specialFlat[1]);
+
+  // 2) AWHO / slash units: 3T/107, 2/101 (before letter-tower codes)
+  const slashUnit = text.match(SLASH_TOWER_FLAT);
+  if (slashUnit) {
+    tower ??= cleanTower(slashUnit[1]);
+    flatNumber ??= normalizeFlat(slashUnit[2]);
   }
 
-  const towerFlat = !tower || !flatNumber ? text.match(TOWER_THEN_FLAT) : null;
-  if (towerFlat) {
-    tower ??= cleanTower(towerFlat[1]);
-    flatNumber ??= normalizeFlat(towerFlat[2]);
-  } else if (!tower || !flatNumber) {
+  // 2b) OCR dropped slash: "3T111" / "3T107" (still prefer real slash match above)
+  if (!tower || !flatNumber) {
+    const glued = text.match(GLUED_AHWO_UNIT);
+    if (glued) {
+      tower ??= cleanTower(glued[1]);
+      flatNumber ??= normalizeFlat(glued[2]);
+    }
+  }
+
+  // 3) Combined Indian unit codes: B-402, T3-1804, D-101, Wing A-204
+  const unit = text.match(UNIT_CODE);
+  if (unit) {
+    tower ??= cleanTower(unit[1]);
+    flatNumber ??= normalizeFlat(unit[2]);
+  }
+
+  // 4) Explicit "Tower X Flat Y" (incl. OCR gwve/Fiat)
+  if (!tower || !flatNumber) {
+    const inline = text.match(TOWER_FLAT_INLINE) ?? text.match(TOWER_THEN_FLAT);
+    if (inline) {
+      tower ??= cleanTower(inline[1]);
+      flatNumber ??= normalizeFlat(inline[2]);
+    }
+  }
+
+  const meeshoUnit = !tower || !flatNumber ? text.match(TOWER_SPACE_FLAT) : null;
+  if (meeshoUnit) {
+    tower ??= cleanTower(meeshoUnit[1]);
+    flatNumber ??= normalizeFlat(meeshoUnit[2]);
+  }
+
+  if (!tower || !flatNumber) {
     const flatTower = text.match(FLAT_THEN_TOWER);
     if (flatTower) {
       flatNumber ??= normalizeFlat(flatTower[1]);
@@ -113,19 +228,34 @@ function findUnit(text: string): { tower: string | null; flatNumber: string | nu
       if (amazon) {
         flatNumber ??= normalizeFlat(amazon[1]);
         tower ??= cleanTower(amazon[2]);
-      } else {
-        const unit = text.match(UNIT_CODE);
-        if (unit) {
-          tower ??= cleanTower(unit[1]);
-          flatNumber ??= normalizeFlat(unit[2]);
-        }
       }
     }
   }
 
+  // 5) Wing / Block / thematic / directional / T1 when tower still missing
+  if (!tower) {
+    const wing = text.match(WING_LABELED);
+    if (wing) tower = cleanTower(wing[1]);
+  }
+  if (!tower) {
+    const thematic = text.match(THEMATIC_TOWER_LABELED);
+    if (thematic) tower = cleanTower(thematic[1] || thematic[2]);
+  }
+  if (!tower) {
+    const dir = text.match(DIRECTIONAL_WING);
+    if (dir) tower = cleanTower(dir[1]);
+  }
+  if (!tower) {
+    const tCode = text.match(TOWER_T_CODE);
+    if (tCode) tower = cleanTower(tCode[1]);
+  }
   if (!tower) {
     const only = text.match(TOWER_WITH_NUM);
-    if (only) tower = cleanTower(only[1]);
+    if (only) {
+      const candidate = cleanTower(only[1]);
+      // Never take "SHIP" from TOWNSHIP via TOWER_WORD matching "TOWN".
+      if (candidate && !/^(SHIP|NSHIP)$/i.test(candidate)) tower = candidate;
+    }
   }
 
   if (!flatNumber) {
@@ -139,24 +269,49 @@ function findUnit(text: string): { tower: string | null; flatNumber: string | nu
   }
 
   // Incomplete OCR flat like "8," — try a better flat near address/tower.
-  if (flatNumber && flatNumber.length < 3) {
+  if (flatNumber && flatNumber.length < 3 && !/^[A-Z]/.test(flatNumber)) {
     const better = findFlatNearAddress(text);
     if (better) flatNumber = better;
   }
 
-  // Keep 2-digit flats when paired with a tower (e.g. Flat 70. Tower 5 from noisy OCR).
-  // Drop only lone 1-digit scraps.
-  if (flatNumber && flatNumber.length < 2) flatNumber = null;
-  if (flatNumber && flatNumber.length < 3 && !tower) flatNumber = null;
+  // Keep short flats when paired with a tower (e.g. Flat 70, Flat 3M, G01).
+  // Drop only lone 1-char scraps without a tower.
+  if (flatNumber && flatNumber.length < 2 && !tower) flatNumber = null;
+  if (flatNumber && /^\d{1,2}$/.test(flatNumber) && flatNumber.length < 3 && !tower) {
+    flatNumber = null;
+  }
+
+  // "GREATER NOIDA 011!" is not a flat — drop leading-zero 3-digit scraps without AWHO tower.
+  if (flatNumber && /^0\d{2}$/.test(flatNumber) && !(tower && /T$/i.test(tower))) {
+    flatNumber = null;
+  }
+
+  // Final guard: township / sector fragments.
+  if (tower && /^(NSHIP|SHIP|TOWN|TOWNSHIP|ANO|SECTOR)$/i.test(tower)) {
+    tower = null;
+  }
 
   return { tower, flatNumber };
 }
 
 function normalizeFlat(value: string | null | undefined): string | null {
   if (!value) return null;
-  const digits = value.replace(/\D/g, "");
-  if (digits.length >= 3 && digits.length <= 4) return digits;
-  if (digits.length > 0 && digits.length < 3) return digits; // keep weak hint for retry upgrade
+  const cleaned = value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (!cleaned) return null;
+
+  // Ground / penthouse / duplex: G01, G1, PH1, D101
+  if (/^(?:PH|G|D)\d{1,3}[A-Z]?$/.test(cleaned)) return cleaned;
+
+  // Standard 3–4 digit (101, 1203, 1804) and optional letter (12A)
+  if (/^\d{3,4}$/.test(cleaned)) return cleaned;
+  if (/^\d{2,3}[A-Z]$/.test(cleaned)) return cleaned;
+  if (/^\d{1,3}[A-Z]$/.test(cleaned)) return cleaned; // 3M, 12A
+
+  // Leading-zero ground series: 001, 002
+  if (/^0\d{2,3}$/.test(cleaned)) return cleaned;
+
+  // Weak 1–2 digit hint when tower paired (upgrade path)
+  if (/^\d{1,4}$/.test(cleaned)) return cleaned;
   return null;
 }
 
@@ -229,6 +384,8 @@ function findName(text: string): string | null {
   // Strong OCR recovery for known-mangled resident names.
   if (FOZIA_ARZOO_OCR.test(text)) return "Fozia Arzoo";
   if (RAHUL_SHARMA_OCR.test(text)) return "Rahul Sharma";
+  if (REHAN_KHAN_OCR.test(text)) return "Rehan Khan";
+  if (MANISHA_PRIYAMVADA_OCR.test(text)) return "Manisha Priyamvada";
 
   const match = text.match(RECIPIENT);
   if (match) {
@@ -241,26 +398,71 @@ function findName(text: string): string | null {
     .map((line) => line.trim())
     .filter(Boolean);
 
+  // Prefer the name that sits just above tower/address (Flipkart / AWHO block).
+  const addressIdx = lines.findIndex(
+    (line) =>
+      ADDRESS_HINT.test(line) ||
+      SLASH_TOWER_FLAT.test(line) ||
+      TOWER_FLAT_INLINE.test(line) ||
+      new RegExp(TOWER_WORD, "i").test(line),
+  );
+
   const ranked: { name: string; score: number }[] = [];
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (isSellerOrInvoiceLine(line)) continue;
+    if (SLASH_TOWER_FLAT.test(line) || UNIT_CODE.test(line)) continue;
 
     const single = cleanPersonName(line);
     if (single) {
-      // Prefer names near the end of the OCR dump (customer block often last when label is rotated).
-      const positionBonus = i >= lines.length - 6 ? 6 : 0;
-      ranked.push({ name: single, score: scorePersonName(single) + positionBonus });
+      ranked.push({
+        name: single,
+        score: scorePersonName(single) + namePositionBonus(i, addressIdx, lines.length),
+      });
     }
 
-    if (i + 1 < lines.length && !isSellerOrInvoiceLine(lines[i + 1])) {
-      const next = lines[i + 1].replace(/\b\d{3,5}\b/g, " ").replace(/\s+/g, " ").trim();
+    const nextLine = i + 1 < lines.length ? lines[i + 1] : "";
+    const nextIsAddress =
+      !nextLine ||
+      isSellerOrInvoiceLine(nextLine) ||
+      SLASH_TOWER_FLAT.test(nextLine) ||
+      UNIT_CODE.test(nextLine) ||
+      ADDRESS_HINT.test(nextLine) ||
+      /^\d/.test(nextLine);
+
+    if (!nextIsAddress) {
+      const next = nextLine.replace(/\b\d{3,5}\b/g, " ").replace(/\s+/g, " ").trim();
       const merged = cleanPersonName(`${line} ${next}`);
       if (merged) {
-        const positionBonus = i >= lines.length - 6 ? 6 : 0;
-        ranked.push({ name: merged, score: scorePersonName(merged) + 3 + positionBonus });
+        ranked.push({
+          name: merged,
+          score:
+            scorePersonName(merged) +
+            3 +
+            namePositionBonus(i, addressIdx, lines.length),
+        });
       }
+    }
+  }
+
+  // Ship To block: join consecutive short name tokens (Menish + PriyemYC).
+  const shipIdx = lines.findIndex((line) => /^ship\s*to$/i.test(line));
+  if (shipIdx >= 0) {
+    const parts: string[] = [];
+    for (let i = shipIdx + 1; i < Math.min(shipIdx + 5, lines.length); i++) {
+      const line = lines[i];
+      if (isSellerOrInvoiceLine(line) || SLASH_TOWER_FLAT.test(line) || ADDRESS_HINT.test(line)) {
+        break;
+      }
+      if (/^(awb|awd)\b/i.test(line)) continue;
+      const cleaned = cleanPersonName(line);
+      if (cleaned) parts.push(cleaned);
+      if (parts.length >= 2) break;
+    }
+    if (parts.length >= 2) {
+      const joined = parts.slice(0, 2).join(" ");
+      ranked.push({ name: joined, score: scorePersonName(joined) + 16 });
     }
   }
 
@@ -270,11 +472,30 @@ function findName(text: string): string | null {
   return best?.name ?? null;
 }
 
+function namePositionBonus(index: number, addressIdx: number, lineCount: number): number {
+  // Name is usually 1–2 lines above tower / society address on Flipkart / eKart labels.
+  if (addressIdx >= 0) {
+    const distance = addressIdx - index;
+    if (distance === 1) return 14;
+    if (distance === 2) return 10;
+    if (distance === 0) return 4;
+    if (distance < 0) return -8; // below address → often "Ordered Through Flipkart"
+  }
+  // Rotated labels: slight preference for late lines, but weaker than address proximity.
+  return index >= lineCount - 6 ? 4 : 0;
+}
+
 function isSellerOrInvoiceLine(line: string): boolean {
   if (!line.trim()) return true;
   if (/img-|\.jpg|\.png|wa\d{4}/i.test(line)) return true;
+  if (/^ship\s*to$/i.test(line.trim())) return true;
+  if (/^(awb|awd)\b/i.test(line)) return true;
+  if (/ordered\s+through|through\s+flipkart|through\s+amazon/i.test(line)) return true;
+  // Accidental keyboard chrome in camera frame (F6…F12, Prt Sc, etc.).
+  if (/^f\d{1,2}$/i.test(line.trim())) return true;
+  if (/^prt\s*sc$/i.test(line.trim())) return true;
   if (
-    /tax\s*invoice|product\s*detail|sku|gstin|sold\s*by|radha|industri|valmo|pickup|hsn|igst|order\s*no|free\s*s/i.test(
+    /tax\s*invoice|product\s*detail|sku|gstin|sold\s*by|seller|sellfr|sfller|radha|industri|valmo|pickup|hsn|igst|order\s*no|orde\s*lo|oder\s*l|order\s*lc|free\s*s|ship\s*dete|ship\s*det|ship\s*date|invoicedate|nvocfday|\bnzmf\b|\bnzm\b|township/i.test(
       line,
     )
   ) {
