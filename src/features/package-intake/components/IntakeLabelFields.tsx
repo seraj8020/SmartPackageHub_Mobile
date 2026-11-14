@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import { colors } from "@/shared/theme/colors";
+import { sortCarriersForDropdown } from "@/features/package-intake/services/intakeApi";
 
 const OTHER_ONLY = ["Other"] as const;
 
@@ -40,10 +41,10 @@ export function IntakeLabelFields({
   onFlatChange,
 }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false);
-  const options = carriers && carriers.length > 0 ? carriers : OTHER_ONLY;
-  const courierValue = (options as readonly string[]).includes(courier)
-    ? courier
-    : "Other";
+  const options = sortCarriersForDropdown(
+    carriers && carriers.length > 0 ? carriers : OTHER_ONLY,
+  );
+  const courierValue = options.includes(courier) ? courier : "";
 
   return (
     <View style={styles.block}>
@@ -52,7 +53,14 @@ export function IntakeLabelFields({
         style={[styles.input, styles.dropdown]}
         onPress={() => setPickerOpen(true)}
       >
-        <Text style={styles.dropdownValue}>{courierValue}</Text>
+        <Text
+          style={[
+            styles.dropdownValue,
+            !courierValue && styles.dropdownPlaceholder,
+          ]}
+        >
+          {courierValue || "Select courier"}
+        </Text>
         <Text style={styles.dropdownChevron}>▾</Text>
       </Pressable>
 
@@ -171,6 +179,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   dropdownValue: { fontSize: 14, color: colors.text, fontWeight: "600" },
+  dropdownPlaceholder: { color: "#9CA3AF", fontWeight: "500" },
   dropdownChevron: { fontSize: 12, color: colors.textMuted },
   row: { flexDirection: "row", gap: 10 },
   half: { flex: 1 },

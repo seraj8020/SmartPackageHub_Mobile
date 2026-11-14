@@ -127,8 +127,21 @@ export async function getIntakeCarriers(societyId?: string | null): Promise<stri
     : Array.isArray((body as { data?: unknown })?.data)
       ? ((body as { data: unknown[] }).data)
       : [];
-  const carriers = rows.map((item) => String(item)).filter((item) => item.trim().length > 0);
-  return carriers.length > 0 ? carriers : [...OTHER_ONLY];
+  const carriers = rows
+    .map((item) => String(item).trim())
+    .filter((item) => item.length > 0);
+  return sortCarriersForDropdown(carriers.length > 0 ? carriers : [...OTHER_ONLY]);
+}
+
+/** A–Z (case-insensitive), with "Other" always last. */
+export function sortCarriersForDropdown(carriers: readonly string[]): string[] {
+  const unique = Array.from(
+    new Map(carriers.map((name) => [name.toLowerCase(), name])).values(),
+  );
+  const named = unique
+    .filter((name) => name.toLowerCase() !== "other")
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  return [...named, "Other"];
 }
 
 export async function confirmIntake(

@@ -1,12 +1,12 @@
 export const INTAKE_COURIERS = [
   "Amazon",
-  "Flipkart",
+  "BlueDart",
   "Delhivery",
   "DTDC",
-  "BlueDart",
-  "Xpressbees",
-  "Shadowfax",
+  "Flipkart",
   "Meesho",
+  "Shadowfax",
+  "Xpressbees",
   "Other",
 ] as const;
 

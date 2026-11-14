@@ -83,7 +83,7 @@ export function useLabelScanner() {
   const [photoState, setPhotoState] = useState<string | null>(null);
   const [elapsedMs, setElapsedMs] = useState<number | null>(null);
 
-  const [courier, setCourier] = useState("Other");
+  const [courier, setCourier] = useState("");
   const [awb, setAwb] = useState("");
   const [name, setName] = useState("");
   const [tower, setTower] = useState("");
@@ -371,7 +371,7 @@ export function useLabelScanner() {
     photoIdRef.current = null;
     edited.current = emptyEdited();
     lastScanAt.current = 0;
-    setCourier("Other");
+    setCourier("");
     setAwb("");
     setName("");
     setTower("");
