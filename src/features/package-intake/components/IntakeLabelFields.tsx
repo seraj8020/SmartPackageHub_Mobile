@@ -101,8 +101,8 @@ export function IntakeLabelFields({
           <TextInput
             value={flat}
             onChangeText={onFlatChange}
-            keyboardType="number-pad"
-            placeholder="101"
+            autoCapitalize="characters"
+            placeholder="101 / 3M"
             placeholderTextColor="#9CA3AF"
             style={styles.input}
           />

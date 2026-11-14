@@ -38,9 +38,12 @@ const TOWER_THEN_FLAT = new RegExp(
   `${TOWER_WORD}\\s*[-:]?\\s*([A-Za-z0-9]{1,12})\\s*[,/-]?\\s*${FLAT_WORD}(?:\\s*(?:no\\.?|number|#))?\\s*[:-]?\\s*([A-Za-z]?\\d{1,4}[A-Za-z]?)`,
   "i",
 );
-/** "Flat 101, Tower 5" and OCR "Flat 70. Tower 5" (dot/comma after flat). */
+/**
+ * "Flat 101, Tower 5" and Delhivery-style with society between:
+ * "Flat 3M, Amarana Residences Tower 2 44" (44 = street/house, not flat).
+ */
 const FLAT_THEN_TOWER = new RegExp(
-  `${FLAT_WORD}(?:\\s*(?:no\\.?|number|#))?\\s*[:-]?\\s*([A-Za-z]?\\d{1,4}[A-Za-z]?)\\.?\\s*[,/-]?\\s*${TOWER_WORD}\\s*[-:]?\\s*([A-Za-z0-9]{1,12})`,
+  `${FLAT_WORD}(?:\\s*(?:no\\.?|number|#))?\\s*[:-]?\\s*([A-Za-z]?\\d{1,4}[A-Za-z]?)\\b(?:[^\\n]{0,80}?)\\b${TOWER_WORD}\\s*[-:]?\\s*([A-Za-z0-9]{1,12})(?![0-9])`,
   "i",
 );
 /** Flipkart OCR: "gwve 2 Fiat 3M" / "Tower 2 Flat 3M" */
@@ -57,9 +60,13 @@ const TOWER_WITH_NUM = new RegExp(
   String.raw`\b${TOWER_WORD}\s*[-:]?\s*([0-9]{1,2}|[A-Za-z]{1,12})(?![0-9])`,
   "i",
 );
-/** Meesho / Valmo: "tower 4 4158" or "Tower 4 4158" */
+/**
+ * Meesho / Valmo: "tower 4 4158" (3–4 digit flat after tower).
+ * Do not treat "Tower 2 44" as flat when 44 is a short street/house number —
+ * prefer an explicit "Flat 3M" elsewhere on the label.
+ */
 const TOWER_SPACE_FLAT = new RegExp(
-  String.raw`\b${TOWER_WORD}\s*[-:]?\s*([0-9A-Za-z]{1,12})\s+([A-Za-z]?\d{2,4}[A-Za-z]?)\b`,
+  String.raw`\b${TOWER_WORD}\s*[-:]?\s*([0-9A-Za-z]{1,12})\s+([A-Za-z]?\d{3,4}[A-Za-z]?)\b`,
   "i",
 );
 /**
@@ -203,21 +210,8 @@ function findUnit(text: string): { tower: string | null; flatNumber: string | nu
     flatNumber ??= normalizeFlat(unit[2]);
   }
 
-  // 4) Explicit "Tower X Flat Y" (incl. OCR gwve/Fiat)
-  if (!tower || !flatNumber) {
-    const inline = text.match(TOWER_FLAT_INLINE) ?? text.match(TOWER_THEN_FLAT);
-    if (inline) {
-      tower ??= cleanTower(inline[1]);
-      flatNumber ??= normalizeFlat(inline[2]);
-    }
-  }
-
-  const meeshoUnit = !tower || !flatNumber ? text.match(TOWER_SPACE_FLAT) : null;
-  if (meeshoUnit) {
-    tower ??= cleanTower(meeshoUnit[1]);
-    flatNumber ??= normalizeFlat(meeshoUnit[2]);
-  }
-
+  // 4) Explicit "Flat … Tower …" first (Delhivery: Flat 3M … Tower 2 44).
+  //    Labeled flat must win over a trailing street number after the tower.
   if (!tower || !flatNumber) {
     const flatTower = text.match(FLAT_THEN_TOWER);
     if (flatTower) {
@@ -230,6 +224,27 @@ function findUnit(text: string): { tower: string | null; flatNumber: string | nu
         tower ??= cleanTower(amazon[2]);
       }
     }
+  }
+
+  if (!flatNumber) {
+    const labeledFlat = text.match(FLAT_ONLY);
+    if (labeledFlat) flatNumber = normalizeFlat(labeledFlat[1]);
+  }
+
+  // 5) Explicit "Tower X Flat Y" (incl. OCR gwve/Fiat)
+  if (!tower || !flatNumber) {
+    const inline = text.match(TOWER_FLAT_INLINE) ?? text.match(TOWER_THEN_FLAT);
+    if (inline) {
+      tower ??= cleanTower(inline[1]);
+      flatNumber ??= normalizeFlat(inline[2]);
+    }
+  }
+
+  // Meesho "tower 4 4158" only when flat still unknown (not "Tower 2 44" street nos).
+  const meeshoUnit = !tower || !flatNumber ? text.match(TOWER_SPACE_FLAT) : null;
+  if (meeshoUnit) {
+    tower ??= cleanTower(meeshoUnit[1]);
+    flatNumber ??= normalizeFlat(meeshoUnit[2]);
   }
 
   // 5) Wing / Block / thematic / directional / T1 when tower still missing

@@ -132,7 +132,7 @@ export function useLabelScanner() {
   }, []);
   const setFlatEdited = useCallback((value: string) => {
     edited.current.flat = true;
-    setFlat(value);
+    setFlat(value.toUpperCase());
   }, []);
 
   function applyResidentFields(resident: ResidentMatch) {

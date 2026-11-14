@@ -19,7 +19,10 @@
     },
     "android": {
       "package": "com.smartpackagehub.mobile",
-      "permissions": ["android.permission.CAMERA"],
+      "permissions": [
+        "android.permission.CAMERA"
+      ],
+      "usesCleartextTraffic": true,
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#1C3D5A",
@@ -43,7 +46,21 @@
           "recordAudioAndroid": false,
           "barcodeScannerEnabled": true
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "eedd643b-2de0-4e64-880e-3cb2bd1bd717"
+      }
+    },
+    "owner": "byonverse"
   }
 }
