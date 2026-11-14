@@ -10,6 +10,7 @@ import { StaffShelvedPackagesScreen } from "@/features/package-inbox/screens/Sta
 import { StaffScanScreen } from "@/features/package-intake/screens/StaffScanScreen";
 import { StaffTabPlaceholderScreen } from "@/features/package-intake/screens/StaffTabPlaceholderScreen";
 import { RunnerRouteScreen } from "@/features/package-handover/screens/RunnerRouteScreen";
+import { ShelfInventoryScreen } from "@/features/shelf-management/screens/ShelfInventoryScreen";
 
 const Tab = createBottomTabNavigator<StaffTabParamList>();
 
@@ -60,19 +61,13 @@ export function StaffTabNavigator() {
       />
       <Tab.Screen
         name="Map"
+        component={ShelfInventoryScreen}
         options={{
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="grid-outline" size={size - 2} color={color} />
           ),
         }}
-      >
-        {() => (
-          <Placeholder
-            title="Map"
-            body="Shelf occupancy map (same Map tab as web)."
-          />
-        )}
-      </Tab.Screen>
+      />
       <Tab.Screen
         name="Route"
         options={{
