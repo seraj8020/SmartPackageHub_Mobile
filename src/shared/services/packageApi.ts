@@ -39,6 +39,16 @@ export interface HubPackage {
   preferredDeliveryMethod?: "DoorDelivery" | "CounterPickup" | string;
 }
 
+export interface HistoryItem {
+  id: string;
+  courier: string;
+  collectedAt: string;
+  category: string;
+  method: string;
+  pkgNumber?: string;
+  methodOfDelivery?: string;
+}
+
 export interface PackageStatusUpdateResponse {
   success: boolean;
   packageId: string;
@@ -139,6 +149,35 @@ export async function getResidentPackages(residentId: string): Promise<HubPackag
   }
   const rows = (await response.json()) as Array<Record<string, unknown>>;
   return rows.map(toHubPackage);
+}
+
+/** Returns packages that have been collected or delivered by a resident. */
+export async function getResidentHistory(residentId: string): Promise<HistoryItem[]> {
+  const response = await fetch(
+    `${API}/residents/${encodeURIComponent(residentId)}/history`,
+    { headers: await authHeaders() },
+  );
+  if (!response.ok) {
+    const err = (await response.json().catch(() => ({}))) as {
+      message?: string;
+      Message?: string;
+    };
+    throw new Error(err.message ?? err.Message ?? `Failed to fetch history (${response.status})`);
+  }
+
+  const rows = (await response.json()) as Array<Record<string, unknown>>;
+  return rows.map((row) => {
+    const method = textOf(row, "method", "Method", "methodOfDelivery", "MethodOfDelivery");
+    return {
+      id: textOf(row, "id", "Id") || textOf(row, "packageId", "PackageId"),
+      courier: textOf(row, "courier", "Courier") || "Courier",
+      collectedAt: textOf(row, "collectedAt", "CollectedAt", "deliveredAt", "DeliveredAt"),
+      category: textOf(row, "category", "Category", "status", "Status") || "Miscellaneous",
+      method,
+      pkgNumber: textOf(row, "pkgNumber", "PkgNumber", "packageId", "PackageId") || undefined,
+      methodOfDelivery: method || undefined,
+    };
+  });
 }
 
 export async function getSocietyPackages(societyId: string): Promise<HubPackage[]> {
