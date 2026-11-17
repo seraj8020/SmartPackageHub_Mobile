@@ -6,18 +6,10 @@ import {
   tabBarScreenOptions,
 } from "@/app/navigation/SafeBottomTabBar";
 import { ResidentHomeScreen } from "@/features/package-inbox/screens/ResidentHomeScreen";
+import { ResidentHistoryScreen } from "@/features/package-inbox/screens/ResidentHistoryScreen";
 import { ResidentPlaceholderScreen } from "@/features/package-inbox/screens/ResidentPlaceholderScreen";
 
 const Tab = createBottomTabNavigator<ResidentTabParamList>();
-
-function HistoryScreen() {
-  return (
-    <ResidentPlaceholderScreen
-      title="History"
-      body="Delivered and past packages will appear here (same History tab as web)."
-    />
-  );
-}
 
 function VacationScreen() {
   return (
@@ -54,7 +46,7 @@ export function ResidentTabNavigator() {
       />
       <Tab.Screen
         name="History"
-        component={HistoryScreen}
+        component={ResidentHistoryScreen}
         options={{
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="archive-outline" size={size - 2} color={color} />
