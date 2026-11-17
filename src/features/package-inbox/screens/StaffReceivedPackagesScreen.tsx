@@ -30,7 +30,6 @@ import { rowFromShelfCode } from "@/features/shelf-management/utils/shelfCapacit
 import { getSocieties, type HubPackage } from "@/shared/services/packageApi";
 import { tokenStorage } from "@/shared/services/tokenStorage";
 import { colors } from "@/shared/theme/colors";
-import { SignOutButton } from "@/shared/ui/SignOutButton";
 import { formatUnitLabel } from "@/shared/utils/formatUnitLabel";
 
 function codLabel(pkg: HubPackage): string | null {
@@ -95,7 +94,7 @@ export function StaffReceivedPackagesScreen() {
 
   if (!session) {
     return (
-      <View style={[styles.root, { paddingTop: insets.top }]}>
+      <View style={styles.root}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Received</Text>
         </View>
@@ -256,7 +255,7 @@ function StaffReceivedBody({
 
   if (receipt) {
     return (
-      <View style={[styles.root, { paddingTop: topInset }]}>
+      <View style={styles.root}>
         <IntakeReceiptCard
           receipt={receipt}
           courierFallback={receipt.courier || "Courier"}
@@ -273,27 +272,7 @@ function StaffReceivedBody({
   }
 
   return (
-    <View style={[styles.root, { paddingTop: topInset }]}>
-      <View
-        style={[
-          styles.topBar,
-          {
-            paddingLeft: 12 + sideInset,
-            paddingRight: 12 + sideInset,
-          },
-        ]}
-      >
-        <View style={styles.topBarText}>
-          <Text style={styles.society} numberOfLines={1}>
-            {societyName}
-          </Text>
-          <Text style={styles.user} numberOfLines={1}>
-            {username}
-          </Text>
-        </View>
-        <SignOutButton onPress={() => void onSignOut()} />
-      </View>
-
+    <View style={styles.root}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Received</Text>
         <Text style={styles.headerSub}>
