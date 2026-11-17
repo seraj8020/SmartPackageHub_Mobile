@@ -21,7 +21,6 @@ import { useStaffReceive } from "@/features/package-inbox/hooks/useStaffReceive"
 import { getSocieties, type HubPackage } from "@/shared/services/packageApi";
 import { tokenStorage } from "@/shared/services/tokenStorage";
 import { colors } from "@/shared/theme/colors";
-import { SignOutButton } from "@/shared/ui/SignOutButton";
 import { formatUnitLabel } from "@/shared/utils/formatUnitLabel";
 
 export function StaffShelvedPackagesScreen() {
@@ -60,7 +59,7 @@ export function StaffShelvedPackagesScreen() {
 
   if (!session) {
     return (
-      <View style={[styles.root, { paddingTop: insets.top }]}>
+      <View style={styles.root}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Shelved Packages</Text>
         </View>
@@ -131,27 +130,7 @@ function StaffShelvedBody({
   }
 
   return (
-    <View style={[styles.root, { paddingTop: topInset }]}>
-      <View
-        style={[
-          styles.topBar,
-          {
-            paddingLeft: 12 + sideInset,
-            paddingRight: 12 + sideInset,
-          },
-        ]}
-      >
-        <View style={styles.topBarText}>
-          <Text style={styles.society} numberOfLines={1}>
-            {societyName}
-          </Text>
-          <Text style={styles.user} numberOfLines={1}>
-            {username}
-          </Text>
-        </View>
-        <SignOutButton onPress={() => void onSignOut()} />
-      </View>
-
+    <View style={styles.root}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Shelved Packages</Text>
         <Text style={styles.headerSub}>
