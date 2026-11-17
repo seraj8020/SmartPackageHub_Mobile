@@ -11,14 +11,11 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback } from "react";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { resetToRoot } from "@/app/navigation/navigationHelpers";
-import { clearStaffSession, getStaffSession } from "@/features/authentication/services/sessionStorage";
+import { getStaffSession } from "@/features/authentication/services/sessionStorage";
 import type { StaffSessionState } from "@/features/authentication/models/auth.types";
 import { getSocieties, getSocietyPackages, startTowerRoute, type HubPackage } from "@/shared/services/packageApi";
 import { colors } from "@/shared/theme/colors";
-import { SignOutButton } from "@/shared/ui/SignOutButton";
-import { tokenStorage } from "@/shared/services/tokenStorage";
 import { formatUnitLabel } from "@/shared/utils/formatUnitLabel";
 
 interface RunnerRouteScreenProps {
@@ -45,7 +42,6 @@ function compareFlat(a: HubPackage, b: HubPackage): number {
 
 export function RunnerRouteScreen({ societyId: societyIdProp, runnerName: runnerNameProp }: RunnerRouteScreenProps) {
   const navigation = useNavigation();
-  const insets = useSafeAreaInsets();
   const [session, setSession] = useState<StaffSessionState | null>(null);
   const [societyName, setSocietyName] = useState("Society");
   useFocusEffect(useCallback(() => {
@@ -81,7 +77,7 @@ export function RunnerRouteScreen({ societyId: societyIdProp, runnerName: runner
   const [success, setSuccess] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     let active = true;
     if (!societyId) {
       setPackages([]);
@@ -98,7 +94,7 @@ export function RunnerRouteScreen({ societyId: societyIdProp, runnerName: runner
       })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [societyId, reloadKey]);
+  }, [societyId, reloadKey]));
 
   const eligible = useMemo(
     () => packages.filter((pkg) => pkg.status?.trim().toLowerCase() === "shelved" && Boolean((pkg.tower || pkg.towerWing)?.trim())),
@@ -145,18 +141,7 @@ export function RunnerRouteScreen({ societyId: societyIdProp, runnerName: runner
   }
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
-      <View style={styles.topBar}>
-        <View style={styles.topBarText}>
-          <Text style={styles.society} numberOfLines={1}>{societyName}</Text>
-          <Text style={styles.user} numberOfLines={1}>{runnerName}</Text>
-        </View>
-        <SignOutButton onPress={() => void (async () => {
-          await clearStaffSession();
-          await tokenStorage.removeToken();
-          resetToRoot(navigation, "Launch");
-        })()} />
-      </View>
+    <View style={styles.root}>
       <View style={styles.header}>
         <Text style={styles.title}>Runner batch</Text>
         <Text style={styles.subtitle}>Group shelved packages by tower and floor, then start the route for handover.</Text>

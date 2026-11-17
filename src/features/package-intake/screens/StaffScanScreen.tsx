@@ -30,7 +30,6 @@ import { getIntakeCarriers } from "@/features/package-intake/services/intakeApi"
 import { getSocieties } from "@/shared/services/packageApi";
 import { tokenStorage } from "@/shared/services/tokenStorage";
 import { colors } from "@/shared/theme/colors";
-import { SignOutButton } from "@/shared/ui/SignOutButton";
 
 export function StaffScanScreen() {
   const navigation = useNavigation();
@@ -76,7 +75,7 @@ export function StaffScanScreen() {
 
   if (!session || !staffUserId) {
     return (
-      <View style={[styles.root, { paddingTop: insets.top }]}>
+      <View style={styles.root}>
         <View style={styles.header}>
           <Text style={styles.society}>Staff intake</Text>
         </View>
@@ -138,7 +137,7 @@ function StaffScanBody({
 
   if (intake.receipt) {
     return (
-      <View style={[styles.root, { paddingTop: topInset }]}>
+      <View style={styles.root}>
         <ReceivedIntakeCard
           receipt={intake.receipt}
           courierFallback={intake.courier}
@@ -152,29 +151,9 @@ function StaffScanBody({
 
   return (
     <KeyboardAvoidingView
-      style={[styles.root, { paddingTop: topInset }]}
+      style={styles.root}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <View
-        style={[
-          styles.header,
-          {
-            paddingLeft: 12 + sideInset,
-            paddingRight: 12 + sideInset,
-          },
-        ]}
-      >
-        <View style={styles.headerText}>
-          <Text style={styles.society} numberOfLines={1}>
-            {societyName}
-          </Text>
-          <Text style={styles.user} numberOfLines={1}>
-            {username}
-          </Text>
-        </View>
-        <SignOutButton onPress={() => void onSignOut()} />
-      </View>
-
       <OfflineQueueBanner />
 
       <ScrollView

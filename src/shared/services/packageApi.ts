@@ -55,6 +55,13 @@ export interface PackageStatusUpdateResponse {
   message?: string;
 }
 
+export type DeliveryMethod = "DoorDelivery" | "CounterPickup";
+
+export interface DeliverPackageRequest {
+  token: string;
+  method: DeliveryMethod;
+}
+
 export interface StartTowerRouteResponse {
   message: string;
   dispatchedCount: number;
@@ -196,6 +203,49 @@ export async function getSocietyPackages(societyId: string): Promise<HubPackage[
   }
   const rows = (await response.json()) as Array<Record<string, unknown>>;
   return rows.map(toHubPackage);
+}
+
+export function getSocietyDispatchedPackages(societyId: string): Promise<HubPackage[]> {
+  return getSocietyPackageList(societyId, "dispatchedpackages");
+}
+
+export function getSocietyDeliveredPackages(societyId: string): Promise<HubPackage[]> {
+  return getSocietyPackageList(societyId, "deliveredpackages");
+}
+
+async function getSocietyPackageList(societyId: string, endpoint: string): Promise<HubPackage[]> {
+  const response = await fetch(
+    `${API}/societies/${encodeURIComponent(societyId)}/${endpoint}`,
+    { headers: await authHeaders() },
+  );
+  if (!response.ok) {
+    const err = (await response.json().catch(() => ({}))) as { message?: string; Message?: string };
+    throw new Error(err.message ?? err.Message ?? `Failed to fetch packages (${response.status})`);
+  }
+  const rows = (await response.json()) as Array<Record<string, unknown>>;
+  return rows.map(toHubPackage);
+}
+
+export async function markPackageDelivered(
+  packageId: string,
+  request: DeliverPackageRequest,
+): Promise<PackageStatusUpdateResponse> {
+  const response = await fetch(`${API}/packages/${encodeURIComponent(packageId)}/deliver`, {
+    method: "POST",
+    headers: await authHeaders(),
+    body: JSON.stringify(request),
+  });
+  const result = (await response.json().catch(() => undefined)) as
+    | boolean
+    | { success?: boolean; Success?: boolean; succeeded?: boolean; Succeeded?: boolean; message?: string; Message?: string }
+    | undefined;
+  const body = typeof result === "object" && result !== null ? result : undefined;
+  const message = body?.message ?? body?.Message;
+  const succeeded = result === true || body?.success === true || body?.Success === true ||
+    body?.succeeded === true || body?.Succeeded === true;
+  if (!response.ok) throw new Error(message ?? `Package delivery update failed (${response.status})`);
+  if (!succeeded) throw new Error(message ?? "Package delivery update failed.");
+  return { success: true, packageId, message };
 }
 
 export async function dispatchPackage(
