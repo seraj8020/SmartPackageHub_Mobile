@@ -9,13 +9,9 @@ import {
   View,
 } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { resetToRoot } from "@/app/navigation/navigationHelpers";
 import type { StaffSessionState } from "@/features/authentication/models/auth.types";
-import {
-  clearStaffSession,
-  getStaffSession,
-} from "@/features/authentication/services/sessionStorage";
+import { getStaffSession } from "@/features/authentication/services/sessionStorage";
 import { IntakeCameraPanel } from "@/features/package-intake/components/IntakeCameraPanel";
 import { IntakeLabelFields } from "@/features/package-intake/components/IntakeLabelFields";
 import { OfflineQueueBanner } from "@/features/package-intake/components/OfflineQueueBanner";
@@ -27,15 +23,11 @@ import { ResidentSearchField } from "@/features/package-intake/components/Reside
 import { usePackageIntake } from "@/features/package-intake/hooks/usePackageIntake";
 import { startIntakeQueueSync } from "@/features/package-intake/services/intakeQueueSync";
 import { getIntakeCarriers } from "@/features/package-intake/services/intakeApi";
-import { getSocieties } from "@/shared/services/packageApi";
-import { tokenStorage } from "@/shared/services/tokenStorage";
 import { colors } from "@/shared/theme/colors";
 
 export function StaffScanScreen() {
   const navigation = useNavigation();
-  const insets = useSafeAreaInsets();
   const [session, setSession] = useState<StaffSessionState | null>(null);
-  const [societyName, setSocietyName] = useState("Loading society…");
 
   useFocusEffect(
     useCallback(() => {
@@ -49,20 +41,6 @@ export function StaffScanScreen() {
           return;
         }
         setSession(stored);
-        try {
-          const societies = await getSocieties();
-          const match = societies.find((item) => item.id === stored.primarySocietyId);
-          if (active) {
-            setSocietyName(
-              match?.name ??
-                (stored.primarySocietyId
-                  ? `Society ${stored.primarySocietyId.slice(0, 8)}…`
-                  : "Society"),
-            );
-          }
-        } catch {
-          if (active) setSocietyName("Society");
-        }
       })();
       return () => {
         active = false;
@@ -76,8 +54,8 @@ export function StaffScanScreen() {
   if (!session || !staffUserId) {
     return (
       <View style={styles.root}>
-        <View style={styles.header}>
-          <Text style={styles.society}>Staff intake</Text>
+        <View style={styles.titleBlock}>
+          <Text style={styles.title}>Package Intake</Text>
         </View>
         <Text style={styles.loading}>Loading session…</Text>
       </View>
@@ -88,15 +66,7 @@ export function StaffScanScreen() {
     <StaffScanBody
       societyId={societyId}
       staffUserId={staffUserId}
-      societyName={societyName}
       username={session.username}
-      topInset={insets.top}
-      sideInset={Math.max(insets.left, insets.right, 0)}
-      onSignOut={async () => {
-        await clearStaffSession();
-        await tokenStorage.removeToken();
-        resetToRoot(navigation, "Launch");
-      }}
     />
   );
 }
@@ -104,19 +74,11 @@ export function StaffScanScreen() {
 function StaffScanBody({
   societyId,
   staffUserId,
-  societyName,
   username,
-  topInset,
-  sideInset,
-  onSignOut,
 }: {
   societyId: string;
   staffUserId: string;
-  societyName: string;
   username: string;
-  topInset: number;
-  sideInset: number;
-  onSignOut: () => Promise<void>;
 }) {
   const [carriers, setCarriers] = useState<string[]>([]);
   const intake = usePackageIntake({
@@ -282,19 +244,8 @@ function StaffScanBody({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
-  header: {
-    backgroundColor: colors.primary,
-    paddingVertical: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  headerText: { flex: 1, flexShrink: 1, minWidth: 0, paddingRight: 8 },
-  society: { color: "#fff", fontSize: 12, fontWeight: "700" },
-  user: { color: "rgba(255,255,255,0.7)", fontSize: 10, marginTop: 1 },
   loading: { padding: 20, color: colors.textMuted },
-  scroll: { paddingHorizontal: 16, paddingBottom: 40, paddingTop: 8 },
+  scroll: { paddingHorizontal: 16, paddingBottom: 40, paddingTop: 0 },
   titleBlock: {
     backgroundColor: colors.primary,
     marginHorizontal: -16,

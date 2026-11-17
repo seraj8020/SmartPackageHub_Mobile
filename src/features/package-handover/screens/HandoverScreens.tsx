@@ -21,6 +21,7 @@ import {
   type HubPackage,
 } from "@/shared/services/packageApi";
 import { formatUnitLabel } from "@/shared/utils/formatUnitLabel";
+import { formatDisplayTimestamp } from "@/shared/utils/formatDisplayTimestamp";
 
 const CARD = { backgroundColor: "#fff", borderRadius: 16, borderWidth: 1, borderColor: "rgba(0,0,0,0.06)" } as const;
 
@@ -111,7 +112,8 @@ function HandoverForm({ pkg, onBack, onDelivered }: { pkg: HubPackage; onBack: (
   }
 
   function onCodeDetected(result: BarcodeScanningResult) {
-    const digits = result.data.replace(/\D/g, "").slice(0, 6);
+    // Resident QR from API: SPH|{pkgNumber}|{otp} — take the OTP segment, not pkg digits.
+    const digits = extractPickupOtp(result.data);
     if (!digits) return;
     setOtp(digits);
     setCameraOpen(false);
@@ -225,7 +227,10 @@ export function StaffDoneScreen({ societyId }: { societyId: string }) {
 
   return (
     <View style={styles.root}>
-      <ScreenHeader title="Flat Delivery" subtitle="Deliver packages to residents' doors" />
+      <ScreenHeader
+        title="Flat Delivery"
+        subtitle="Packages already delivered — start new deliveries from Hand"
+      />
       <ScrollView contentContainerStyle={styles.list} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}>
         {loading ? <ActivityIndicator color={colors.primary} style={styles.center} /> : error ? (
           <View style={[CARD, styles.messageCard, styles.errorCard]}><Text style={styles.errorText}>{error}</Text><ActionLink label="Retry loading packages" icon="refresh-outline" onPress={refresh} /></View>
@@ -240,12 +245,26 @@ export function StaffDoneScreen({ societyId }: { societyId: string }) {
                 <Text style={styles.tracking} numberOfLines={1}>{pkg.tracking}</Text>
               </View>
             </View>
-            <View style={styles.deliveredBadge}><Ionicons name="checkmark-circle" size={12} color="#059669" /><Text style={styles.deliveredText}>{pkg.deliveredAt ? `Delivered · ${formatDeliveredTimestamp(pkg.deliveredAt)}` : "Delivered"}</Text></View>
+            <View style={styles.deliveredBadge}><Ionicons name="checkmark-circle" size={12} color="#059669" /><Text style={styles.deliveredText}>{pkg.deliveredAt ? `Delivered · ${formatDisplayTimestamp(pkg.deliveredAt)}` : "Delivered"}</Text></View>
           </View>
         ))}
       </ScrollView>
     </View>
   );
+}
+
+/** Pull 6-digit pickup OTP from raw QR / pasted code (SPH|PKG|123456 or bare digits). */
+function extractPickupOtp(raw: string): string {
+  const trimmed = raw.trim();
+  const sphParts = trimmed.split("|").map((part) => part.trim());
+  if (sphParts.length >= 3 && /^SPH$/i.test(sphParts[0])) {
+    const fromPayload = sphParts[sphParts.length - 1].replace(/\D/g, "");
+    if (fromPayload.length >= 6) return fromPayload.slice(0, 6);
+  }
+  const trailing = trimmed.match(/(\d{6})\s*$/);
+  if (trailing) return trailing[1];
+  const digits = trimmed.replace(/\D/g, "");
+  return digits.length >= 6 ? digits.slice(-6) : "";
 }
 
 function ScreenHeader({ title, subtitle, backLabel, onBack }: { title: string; subtitle: string; backLabel?: string; onBack?: () => void }) {
@@ -261,12 +280,6 @@ function EmptyState({ icon, title, body }: { icon: "cube-outline"; title: string
 
 function ActionLink({ label, icon, onPress }: { label: string; icon: "refresh-outline"; onPress: () => void }) {
   return <Pressable onPress={onPress} style={styles.retry}><Ionicons name={icon} size={14} color={colors.primary} /><Text style={styles.retryText}>{label}</Text></Pressable>;
-}
-
-function formatDeliveredTimestamp(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true });
 }
 
 const styles = StyleSheet.create({

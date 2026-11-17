@@ -11,13 +11,8 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { resetToRoot } from "@/app/navigation/navigationHelpers";
-import type { StaffSessionState } from "@/features/authentication/models/auth.types";
-import {
-  clearStaffSession,
-  getStaffSession,
-} from "@/features/authentication/services/sessionStorage";
+import { getStaffSession } from "@/features/authentication/services/sessionStorage";
 import type { ShelfInventoryItem } from "@/features/shelf-management/models/shelfInventory.types";
 import { fetchShelfInventory } from "@/features/shelf-management/services/shelfInventoryApi";
 import {
@@ -31,17 +26,13 @@ import {
   staffShelfBadge,
 } from "@/features/shelf-management/utils/staffShelfSearch";
 import { getSocieties } from "@/shared/services/packageApi";
-import { tokenStorage } from "@/shared/services/tokenStorage";
 import { colors } from "@/shared/theme/colors";
-import { SignOutButton } from "@/shared/ui/SignOutButton";
 
 type StorageFilter = "all" | "cold";
 
 export function ShelfInventoryScreen() {
   const navigation = useNavigation();
-  const insets = useSafeAreaInsets();
-  const [session, setSession] = useState<StaffSessionState | null>(null);
-  const [societyName, setSocietyName] = useState("Loading society…");
+  const [societyName, setSocietyName] = useState("");
   const [items, setItems] = useState<ShelfInventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -64,18 +55,12 @@ export function ShelfInventoryScreen() {
         resetToRoot(navigation, "StaffLogin");
         return;
       }
-      setSession(stored);
       try {
         const societies = await getSocieties();
         const match = societies.find((item) => item.id === stored.primarySocietyId);
-        setSocietyName(
-          match?.name ??
-            (stored.primarySocietyId
-              ? `Society ${stored.primarySocietyId.slice(0, 8)}…`
-              : "Society"),
-        );
+        setSocietyName(match?.name ?? "");
       } catch {
-        setSocietyName("Society");
+        setSocietyName("");
       }
 
       const societyId = stored.primarySocietyId ?? stored.societyIds?.[0];
@@ -141,44 +126,13 @@ export function ShelfInventoryScreen() {
     });
   }, [selected, now, query]);
 
-  const username = session?.username ?? "Staff";
-  const sideInset = Math.max(insets.left, insets.right, 0);
-
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
-      <View
-        style={[
-          styles.topBar,
-          {
-            paddingLeft: 12 + sideInset,
-            paddingRight: 12 + sideInset,
-          },
-        ]}
-      >
-        <View style={styles.topBarText}>
-          <Text style={styles.society} numberOfLines={1}>
-            {societyName}
-          </Text>
-          <Text style={styles.user} numberOfLines={1}>
-            {username}
-          </Text>
-        </View>
-        <SignOutButton
-          onPress={() => {
-            void (async () => {
-              await clearStaffSession();
-              await tokenStorage.removeToken();
-              resetToRoot(navigation, "Launch");
-            })();
-          }}
-        />
-      </View>
-
+    <View style={styles.root}>
       <View style={styles.header}>
         <Text style={styles.title}>Shelf map</Text>
         <Text style={styles.sub}>
           Find a shelf or package
-          {societyName && societyName !== "Loading society…" ? ` · ${societyName}` : ""}
+          {societyName ? ` · ${societyName}` : ""}
           {loading ? "" : ` · ${openCount} open`}
         </Text>
       </View>
@@ -327,20 +281,6 @@ function shelfToneStyle(
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
-  topBar: {
-    backgroundColor: colors.primary,
-    paddingTop: 10,
-    paddingBottom: 8,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(255,255,255,0.08)",
-  },
-  topBarText: { flex: 1, flexShrink: 1, minWidth: 0, paddingRight: 8 },
-  society: { color: "#fff", fontSize: 12, fontWeight: "700" },
-  user: { color: "rgba(255,255,255,0.7)", fontSize: 10, marginTop: 1 },
   header: {
     backgroundColor: colors.primary,
     paddingHorizontal: 20,

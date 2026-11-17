@@ -11,12 +11,14 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback } from "react";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { resetToRoot } from "@/app/navigation/navigationHelpers";
+import type { StaffTabParamList } from "@/app/navigation/types";
 import { getStaffSession } from "@/features/authentication/services/sessionStorage";
 import type { StaffSessionState } from "@/features/authentication/models/auth.types";
 import { getSocieties, getSocietyPackages, startTowerRoute, type HubPackage } from "@/shared/services/packageApi";
 import { colors } from "@/shared/theme/colors";
-import { formatUnitLabel } from "@/shared/utils/formatUnitLabel";
+import { formatTowerLabel, formatUnitLabel } from "@/shared/utils/formatUnitLabel";
 
 interface RunnerRouteScreenProps {
   societyId?: string;
@@ -41,7 +43,7 @@ function compareFlat(a: HubPackage, b: HubPackage): number {
 }
 
 export function RunnerRouteScreen({ societyId: societyIdProp, runnerName: runnerNameProp }: RunnerRouteScreenProps) {
-  const navigation = useNavigation();
+  const navigation = useNavigation<BottomTabNavigationProp<StaffTabParamList>>();
   const [session, setSession] = useState<StaffSessionState | null>(null);
   const [societyName, setSocietyName] = useState("Society");
   useFocusEffect(useCallback(() => {
@@ -131,8 +133,12 @@ export function RunnerRouteScreen({ societyId: societyIdProp, runnerName: runner
     setSuccess(null);
     try {
       const result = await startTowerRoute(societyId, selectedTower, selectedFloor === "all" ? null : selectedFloor);
-      setSuccess(`${result.dispatchedCount} packages dispatched for Tower ${selectedTower}.`);
+      setSuccess(
+        `${result.dispatchedCount} packages dispatched for ${formatTowerLabel(selectedTower)}.`,
+      );
       setReloadKey((key) => key + 1);
+      // Match web: after starting a route, open Hand for OTP handover.
+      navigation.navigate("Hand");
     } catch (error) {
       setStartError(error instanceof Error ? error.message : "Unable to start route.");
     } finally {
@@ -176,7 +182,7 @@ export function RunnerRouteScreen({ societyId: societyIdProp, runnerName: runner
         ) : <>
           <Text style={styles.sectionLabel}>SELECT TOWER</Text>
           <View style={styles.chips}>
-            {towers.map((tower) => <ChoiceChip key={tower} label={`Tower ${tower}`} selected={tower === selectedTower} onPress={() => {
+            {towers.map((tower) => <ChoiceChip key={tower} label={formatTowerLabel(tower)} selected={tower === selectedTower} onPress={() => {
               setSelectedTower(tower); setSelectedFloor("all"); setStartError(null); setSuccess(null);
             }} />)}
           </View>
@@ -189,7 +195,7 @@ export function RunnerRouteScreen({ societyId: societyIdProp, runnerName: runner
 
           <View style={styles.batchCard}>
             <View style={styles.batchHeader}>
-              <Text style={styles.batchTitle}>Tower {selectedTower} batch</Text>
+              <Text style={styles.batchTitle}>{formatTowerLabel(selectedTower)} batch</Text>
               <Text style={styles.batchMeta}>{filtered.length} packages · {selectedFloor === "all" ? "All floors" : `Floor ${selectedFloor}`}</Text>
             </View>
             {filtered.length ? filtered.map((pkg, index) => (

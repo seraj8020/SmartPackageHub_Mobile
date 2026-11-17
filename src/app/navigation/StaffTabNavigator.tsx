@@ -9,7 +9,6 @@ import {
 import { StaffReceivedPackagesScreen } from "@/features/package-inbox/screens/StaffReceivedPackagesScreen";
 import { StaffShelvedPackagesScreen } from "@/features/package-inbox/screens/StaffShelvedPackagesScreen";
 import { StaffScanScreen } from "@/features/package-intake/screens/StaffScanScreen";
-import { StaffTabPlaceholderScreen } from "@/features/package-intake/screens/StaffTabPlaceholderScreen";
 import { RunnerRouteScreen } from "@/features/package-handover/screens/RunnerRouteScreen";
 import { ShelfInventoryScreen } from "@/features/shelf-management/screens/ShelfInventoryScreen";
 import { StaffDoneScreen, StaffHandoverScreen } from "@/features/package-handover/screens/HandoverScreens";
@@ -26,10 +25,6 @@ import { SignOutButton } from "@/shared/ui/SignOutButton";
 import { colors } from "@/shared/theme/colors";
 
 const Tab = createBottomTabNavigator<StaffTabParamList>();
-
-function Placeholder({ title, body }: { title: string; body: string }) {
-  return <StaffTabPlaceholderScreen title={title} body={body} />;
-}
 
 export function StaffTabNavigator() {
   const navigation = useNavigation();
@@ -71,8 +66,7 @@ export function StaffTabNavigator() {
 
   return (
     <View style={styles.container}>
-      <View style={{ height: insets.top }} />
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 8) }]}>
         <View style={styles.headerText}>
           <Text style={styles.society} numberOfLines={1}>{societyName}</Text>
           <Text style={styles.user} numberOfLines={1}>{session?.username ?? "Staff"}</Text>
@@ -164,7 +158,16 @@ export function StaffTabNavigator() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  header: { minHeight: 52, backgroundColor: colors.primary, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "rgba(255,255,255,0.08)", paddingHorizontal: 12, paddingVertical: 9, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  header: {
+    backgroundColor: colors.primary,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(255,255,255,0.08)",
+    paddingHorizontal: 12,
+    paddingBottom: 9,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
   headerText: { flex: 1, minWidth: 0, paddingRight: 8 },
   society: { color: "#fff", fontSize: 12, fontWeight: "700" },
   user: { color: "rgba(255,255,255,0.72)", fontSize: 10, marginTop: 1 },
