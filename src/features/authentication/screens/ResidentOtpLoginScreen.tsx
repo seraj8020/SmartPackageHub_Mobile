@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "@/app/navigation/types";
+import { resetToRoot } from "@/app/navigation/navigationHelpers";
 import { AuthFormScreen } from "@/features/authentication/components/AuthFormScreen";
 import { SESSION_DURATION_MS } from "@/features/authentication/models/auth.types";
 import {
@@ -84,7 +85,8 @@ export function ResidentOtpLoginScreen({ navigation }: Props) {
         flatNumber: session.flatNumber,
         expiresAt: Date.now() + SESSION_DURATION_MS,
       });
-      navigation.replace("ResidentApp");
+      // Clear Launch/login from the stack so hardware back cannot return there.
+      resetToRoot(navigation, "ResidentApp");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to verify code.");
     } finally {
@@ -95,7 +97,6 @@ export function ResidentOtpLoginScreen({ navigation }: Props) {
   return (
     <AuthFormScreen>
       <Text style={styles.title}>Resident sign-in</Text>
-      <Text style={styles.hint}>OTP login (same API as web)</Text>
 
       <TextInput
         style={styles.input}
@@ -174,7 +175,6 @@ export function ResidentOtpLoginScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   title: { fontSize: 22, fontWeight: "700", color: colors.primary },
-  hint: { color: colors.textMuted, marginBottom: 4 },
   input: {
     backgroundColor: colors.surface,
     borderWidth: 1,

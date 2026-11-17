@@ -74,6 +74,7 @@ export function StaffTabNavigator() {
         <SignOutButton onPress={() => void signOut()} />
       </View>
       <Tab.Navigator
+        backBehavior="history"
         tabBar={(props) => <SafeBottomTabBar {...props} />}
         screenOptions={{
           ...tabBarScreenOptions,

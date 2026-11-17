@@ -9,6 +9,7 @@ import {
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as SecureStore from "expo-secure-store";
 import type { RootStackParamList } from "@/app/navigation/types";
+import { resetToRoot } from "@/app/navigation/navigationHelpers";
 import { AuthFormScreen } from "@/features/authentication/components/AuthFormScreen";
 import { SESSION_DURATION_MS } from "@/features/authentication/models/auth.types";
 import { STAFF_NAME_STORAGE_KEY } from "@/features/package-intake/constants";
@@ -52,7 +53,8 @@ export function StaffLoginScreen({ navigation }: Props) {
         STAFF_NAME_STORAGE_KEY,
         (session.username || user).trim(),
       );
-      navigation.replace("StaffApp");
+      // Clear Launch/login from the stack so hardware back cannot return there.
+      resetToRoot(navigation, "StaffApp");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to sign in.");
     } finally {
@@ -63,7 +65,6 @@ export function StaffLoginScreen({ navigation }: Props) {
   return (
     <AuthFormScreen>
       <Text style={styles.title}>Staff sign-in</Text>
-      <Text style={styles.hint}>Username / password (same API as web)</Text>
 
       <TextInput
         style={styles.input}
@@ -107,7 +108,6 @@ export function StaffLoginScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   title: { fontSize: 22, fontWeight: "700", color: colors.primary },
-  hint: { color: colors.textMuted, marginBottom: 4 },
   input: {
     backgroundColor: colors.surface,
     borderWidth: 1,

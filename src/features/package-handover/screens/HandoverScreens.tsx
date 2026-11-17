@@ -229,7 +229,7 @@ export function StaffDoneScreen({ societyId }: { societyId: string }) {
     <View style={styles.root}>
       <ScreenHeader
         title="Flat Delivery"
-        subtitle="Packages already delivered — start new deliveries from Hand"
+        subtitle="Packages already delivered"
       />
       <ScrollView contentContainerStyle={styles.list} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}>
         {loading ? <ActivityIndicator color={colors.primary} style={styles.center} /> : error ? (

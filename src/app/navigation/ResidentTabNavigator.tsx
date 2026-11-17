@@ -32,6 +32,7 @@ function ProfileScreen() {
 export function ResidentTabNavigator() {
   return (
     <Tab.Navigator
+      backBehavior="history"
       tabBar={(props) => <SafeBottomTabBar {...props} />}
       screenOptions={tabBarScreenOptions}
     >

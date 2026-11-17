@@ -134,7 +134,7 @@ function StaffShelvedBody({
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Shelved Packages</Text>
         <Text style={styles.headerSub}>
-          All packages still on shelf · not yet dispatched
+          Packages still on Shelf
         </Text>
       </View>
 

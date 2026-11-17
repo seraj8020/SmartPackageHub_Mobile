@@ -276,7 +276,7 @@ function StaffReceivedBody({
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Received</Text>
         <Text style={styles.headerSub}>
-          Assign cold or ambient shelves · free slots update as you shelve
+          Assign cold or ambient shelves
         </Text>
       </View>
 

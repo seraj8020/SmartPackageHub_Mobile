@@ -1,6 +1,9 @@
+import { useEffect, useState } from "react";
+import { ActivityIndicator, View } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "@/app/navigation/types";
+import { resolveInitialRoute } from "@/app/navigation/resolveInitialRoute";
 import { ResidentStackNavigator } from "@/app/navigation/ResidentStackNavigator";
 import { StaffTabNavigator } from "@/app/navigation/StaffTabNavigator";
 import { LaunchScreen } from "@/features/authentication/screens/LaunchScreen";
@@ -12,10 +15,39 @@ import { colors } from "@/shared/theme/colors";
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export function RootNavigator() {
+  const [initialRoute, setInitialRoute] = useState<
+    keyof RootStackParamList | null
+  >(null);
+
+  useEffect(() => {
+    let active = true;
+    void resolveInitialRoute().then((route) => {
+      if (active) setInitialRoute(route);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (!initialRoute) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: colors.background,
+        }}
+      >
+        <ActivityIndicator color={colors.primary} />
+      </View>
+    );
+  }
+
   return (
     <NavigationContainer>
       <Stack.Navigator
-        initialRouteName="Launch"
+        initialRouteName={initialRoute}
         screenOptions={{
           headerStyle: { backgroundColor: colors.surface },
           headerTintColor: colors.primary,
@@ -46,12 +78,12 @@ export function RootNavigator() {
         <Stack.Screen
           name="ResidentApp"
           component={ResidentStackNavigator}
-          options={{ headerShown: false }}
+          options={{ headerShown: false, gestureEnabled: false }}
         />
         <Stack.Screen
           name="StaffApp"
           component={StaffTabNavigator}
-          options={{ headerShown: false }}
+          options={{ headerShown: false, gestureEnabled: false }}
         />
       </Stack.Navigator>
     </NavigationContainer>
