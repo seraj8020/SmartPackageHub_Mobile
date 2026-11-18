@@ -7,6 +7,7 @@ import {
 } from "@/app/navigation/SafeBottomTabBar";
 import { ResidentHomeScreen } from "@/features/package-inbox/screens/ResidentHomeScreen";
 import { ResidentHistoryScreen } from "@/features/package-inbox/screens/ResidentHistoryScreen";
+import { ResidentProfileScreen } from "@/features/package-inbox/screens/ResidentProfileScreen";
 import { ResidentPlaceholderScreen } from "@/features/package-inbox/screens/ResidentPlaceholderScreen";
 
 const Tab = createBottomTabNavigator<ResidentTabParamList>();
@@ -16,15 +17,6 @@ function VacationScreen() {
     <ResidentPlaceholderScreen
       title="Vacation hold"
       body="Pause door delivery while you are away (same Vacation tab as web)."
-    />
-  );
-}
-
-function ProfileScreen() {
-  return (
-    <ResidentPlaceholderScreen
-      title="Profile"
-      body="Resident profile and preferences will appear here (same Profile tab as web)."
     />
   );
 }
@@ -65,7 +57,7 @@ export function ResidentTabNavigator() {
       />
       <Tab.Screen
         name="Profile"
-        component={ProfileScreen}
+        component={ResidentProfileScreen}
         options={{
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="person-outline" size={size - 2} color={color} />

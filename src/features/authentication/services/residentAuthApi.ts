@@ -1,9 +1,48 @@
-import { API } from "@/shared/services/apiClient";
+import { API, authHeaders } from "@/shared/services/apiClient";
 import type {
   RegisteredResident,
   RegisterResidentRequest,
   ResidentLoginSession,
 } from "@/features/authentication/models/auth.types";
+
+export interface ResidentProfile {
+  id: string;
+  societyId: string;
+  fullName?: string;
+  phoneNumber?: string;
+  towerWing?: string;
+  flatNumber?: string;
+}
+
+/** Loads tower/wing + flat for the logged-in resident (used by Profile / inbox). */
+export async function getResidentProfile(residentId: string): Promise<ResidentProfile> {
+  const response = await fetch(`${API}/residents/${encodeURIComponent(residentId)}/profile`, {
+    headers: await authHeaders(),
+  });
+  if (!response.ok) {
+    const body = (await response.json().catch(() => ({}))) as {
+      message?: string;
+      Message?: string;
+    };
+    throw new Error(body.message ?? body.Message ?? "Unable to load resident profile.");
+  }
+  const body = (await response.json()) as Record<string, unknown>;
+  const text = (...keys: string[]) => {
+    for (const key of keys) {
+      const value = body[key];
+      if (typeof value === "string" && value.trim()) return value.trim();
+    }
+    return undefined;
+  };
+  return {
+    id: text("id", "Id") ?? residentId,
+    societyId: text("societyId", "SocietyId") ?? "",
+    fullName: text("fullName", "FullName"),
+    phoneNumber: text("phoneNumber", "PhoneNumber"),
+    towerWing: text("towerWing", "TowerWing"),
+    flatNumber: text("flatNumber", "FlatNumber"),
+  };
+}
 
 /**
  * Self-registration via existing POST /residents/addresident.
