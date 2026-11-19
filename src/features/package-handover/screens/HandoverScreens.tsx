@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import {
   ActivityIndicator,
@@ -22,6 +22,12 @@ import {
 } from "@/shared/services/packageApi";
 import { formatUnitLabel } from "@/shared/utils/formatUnitLabel";
 import { formatDisplayTimestamp } from "@/shared/utils/formatDisplayTimestamp";
+import {
+  DISPATCHED_PACKAGES_CACHE_TTL_MS,
+  getCachedDispatchedPackages,
+  isDispatchedPackagesCacheFresh,
+  setCachedDispatchedPackages,
+} from "@/features/package-handover/services/handoverPackageCache";
 
 const CARD = { backgroundColor: "#fff", borderRadius: 16, borderWidth: 1, borderColor: "rgba(0,0,0,0.06)" } as const;
 
@@ -31,11 +37,41 @@ export function StaffHandoverScreen({ societyId }: { societyId: string }) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<HubPackage | null>(null);
+  const [query, setQuery] = useState("");
   const [reload, setReload] = useState(0);
+  const processedRefreshRef = useRef(0);
+
+  useFocusEffect(useCallback(() => {
+    if (!societyId) return undefined;
+    const interval = setInterval(() => {
+      setReload((current) => current + 1);
+    }, DISPATCHED_PACKAGES_CACHE_TTL_MS);
+    return () => clearInterval(interval);
+  }, [societyId]));
+
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const filteredPackages = normalizedQuery
+    ? packages.filter((pkg) =>
+        [
+          pkg.recipientName,
+          pkg.tracking,
+          pkg.trackingNumber,
+          pkg.flat,
+          pkg.flatNumber,
+        ]
+          .some((value) => value?.toLocaleLowerCase().includes(normalizedQuery)),
+      )
+    : packages;
 
   useFocusEffect(useCallback(() => {
     let active = true;
-    setLoading(true);
+    const cachedPackages = getCachedDispatchedPackages(societyId);
+    if (cachedPackages) setPackages(cachedPackages);
+    const forcedRefresh = reload > processedRefreshRef.current;
+    const shouldFetch = forcedRefresh || !isDispatchedPackagesCacheFresh(societyId);
+    if (forcedRefresh) processedRefreshRef.current = reload;
+    setLoading(!cachedPackages && shouldFetch);
+    setRefreshing(Boolean(cachedPackages && shouldFetch));
     setError(null);
     if (!societyId) {
       setPackages([]);
@@ -43,28 +79,74 @@ export function StaffHandoverScreen({ societyId }: { societyId: string }) {
       setLoading(false);
       return () => { active = false; };
     }
+    if (!shouldFetch) {
+      setLoading(false);
+      setRefreshing(false);
+      return () => { active = false; };
+    }
     void getSocietyDispatchedPackages(societyId)
-      .then((rows) => { if (active) setPackages(rows); })
-      .catch((err: unknown) => { if (active) setError(err instanceof Error ? err.message : "Unable to load dispatched packages."); })
+      .then((rows) => {
+        const fetchedRows = rows.filter(
+          (pkg) => pkg.status?.trim().toLowerCase() !== "delivered" && !pkg.deliveredAt,
+        );
+        const cachedIds = new Set((cachedPackages ?? []).map((pkg) => pkg.id));
+        const dispatchedRows = cachedPackages
+          ? [
+              ...fetchedRows.filter((pkg) => cachedIds.has(pkg.id)),
+              ...fetchedRows.filter((pkg) => !cachedIds.has(pkg.id)),
+            ]
+          : fetchedRows;
+        setCachedDispatchedPackages(societyId, dispatchedRows);
+        if (active) setPackages(dispatchedRows);
+      })
+      .catch((err: unknown) => {
+        if (active && !cachedPackages) setError(err instanceof Error ? err.message : "Unable to load dispatched packages.");
+      })
       .finally(() => { if (active) { setLoading(false); setRefreshing(false); } });
     return () => { active = false; };
   }, [societyId, reload]));
 
   const refresh = useCallback(() => { setRefreshing(true); setReload((value) => value + 1); }, []);
+  const refreshAfterDelivery = useCallback((deliveredPackageId: string) => {
+    const updatedPackages = (getCachedDispatchedPackages(societyId) ?? packages)
+      .filter((pkg) => pkg.id !== deliveredPackageId);
+    setCachedDispatchedPackages(societyId, updatedPackages);
+    setPackages(updatedPackages);
+    setSelected(null);
+    setReload((value) => value + 1);
+  }, [packages, societyId]);
 
   return selected ? (
     <HandoverForm
       pkg={selected}
       onBack={() => setSelected(null)}
-      onDelivered={() => { setSelected(null); refresh(); }}
+      onDelivered={refreshAfterDelivery}
     />
   ) : (
     <View style={styles.root}>
       <ScreenHeader title="Dispatched packages" subtitle="Tap a package to start handover" />
       <ScrollView
         contentContainerStyle={styles.list}
+        keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}
       >
+        <View style={styles.searchBox}>
+          <Ionicons name="search-outline" size={16} color="#94A3B8" />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search resident, AWB, or flat number"
+            placeholderTextColor="#94A3B8"
+            style={styles.searchInput}
+            returnKeyType="search"
+            accessibilityLabel="Search handover packages by resident, AWB, or flat number"
+          />
+          {query.length > 0 ? (
+            <Pressable onPress={() => setQuery("")} hitSlop={8} accessibilityRole="button" accessibilityLabel="Clear search">
+              <Ionicons name="close-circle" size={17} color="#94A3B8" />
+            </Pressable>
+          ) : null}
+        </View>
         {loading ? <ActivityIndicator color={colors.primary} style={styles.center} /> : error ? (
           <View style={[CARD, styles.messageCard, styles.errorCard]}>
             <Text style={styles.errorText}>{error}</Text>
@@ -72,7 +154,9 @@ export function StaffHandoverScreen({ societyId }: { societyId: string }) {
           </View>
         ) : packages.length === 0 ? (
           <EmptyState icon="cube-outline" title="No packages awaiting handover" body="Dispatched packages for this society will appear here." />
-        ) : packages.map((pkg) => (
+        ) : filteredPackages.length === 0 ? (
+          <EmptyState icon="search" title="No matching packages" body="Try a resident name, AWB number, or flat number." />
+        ) : filteredPackages.map((pkg) => (
           <Pressable key={pkg.id} onPress={() => setSelected(pkg)} style={({ pressed }) => [CARD, styles.packageCard, pressed && styles.pressed]}>
             <View style={styles.packageInfo}>
               <View style={styles.rowBetween}>
@@ -94,7 +178,7 @@ export function StaffHandoverScreen({ societyId }: { societyId: string }) {
   );
 }
 
-function HandoverForm({ pkg, onBack, onDelivered }: { pkg: HubPackage; onBack: () => void; onDelivered: () => void }) {
+function HandoverForm({ pkg, onBack, onDelivered }: { pkg: HubPackage; onBack: () => void; onDelivered: (packageId: string) => void }) {
   const [otp, setOtp] = useState("");
   const [method, setMethod] = useState<DeliveryMethod>(pkg.preferredDeliveryMethod === "CounterPickup" ? "CounterPickup" : "DoorDelivery");
   const [busy, setBusy] = useState(false);
@@ -126,10 +210,10 @@ function HandoverForm({ pkg, onBack, onDelivered }: { pkg: HubPackage; onBack: (
     setError(null);
     try {
       await markPackageDelivered(pkg.id, { token, method });
-      onDelivered();
+      onDelivered(pkg.id);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unable to verify OTP and deliver package.";
-      setError(/invalid|expired|otp|token|code/i.test(message) ? "Invalid or expired code. Package stays shelved." : message);
+      setError(/invalid|expired|otp|token|code/i.test(message) ? "Invalid or expired code. The package remains in the handover list." : message);
     } finally { setBusy(false); }
   }
 
@@ -274,7 +358,7 @@ function ScreenHeader({ title, subtitle, backLabel, onBack }: { title: string; s
   </View>;
 }
 
-function EmptyState({ icon, title, body }: { icon: "cube-outline"; title: string; body: string }) {
+function EmptyState({ icon, title, body }: { icon: "cube-outline" | "search"; title: string; body: string }) {
   return <View style={[CARD, styles.empty]}><Ionicons name={icon} size={23} color="#D1D5DB" /><Text style={styles.emptyTitle}>{title}</Text><Text style={styles.emptyText}>{body}</Text></View>;
 }
 
@@ -290,6 +374,8 @@ const styles = StyleSheet.create({
   headerTitle: { color: "#fff", fontSize: 14, fontWeight: "800" },
   headerSubtitle: { color: "rgba(255,255,255,0.62)", fontSize: 10, marginTop: 4 },
   list: { paddingHorizontal: 12, paddingTop: 12, paddingBottom: 22, gap: 8 },
+  searchBox: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#fff", borderWidth: 1, borderColor: "#E5E7EB", borderRadius: 12, paddingHorizontal: 12, height: 42, marginBottom: 4 },
+  searchInput: { flex: 1, color: colors.text, fontSize: 12, paddingVertical: 0 },
   center: { marginTop: 28 },
   packageCard: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 11, paddingVertical: 10, borderRadius: 14, shadowColor: "#000", shadowOpacity: 0.08, shadowRadius: 2, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
   packageInfo: { flex: 1, minWidth: 0 },
