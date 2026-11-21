@@ -1,4 +1,4 @@
-import { API, authHeaders } from "@/shared/services/apiClient";
+import { API, apiFetch, authHeaders } from "@/shared/services/apiClient";
 import type {
   ShelfInventoryItem,
   ShelfPackage,
@@ -39,7 +39,7 @@ export function mapShelfInventoryRow(row: Record<string, unknown>): ShelfInvento
 }
 
 export async function fetchShelfInventory(societyId: string): Promise<ShelfInventoryItem[]> {
-  const response = await fetch(
+  const response = await apiFetch(
     `${API}/societies/${encodeURIComponent(societyId)}/shelf-inventory`,
     { headers: await authHeaders() },
   );

@@ -3,6 +3,7 @@ import { ActivityIndicator, View } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "@/app/navigation/types";
+import { navigationRef } from "@/app/navigation/navigationRef";
 import { resolveInitialRoute } from "@/app/navigation/resolveInitialRoute";
 import { ResidentStackNavigator } from "@/app/navigation/ResidentStackNavigator";
 import { StaffTabNavigator } from "@/app/navigation/StaffTabNavigator";
@@ -45,7 +46,7 @@ export function RootNavigator() {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <Stack.Navigator
         initialRouteName={initialRoute}
         screenOptions={{

@@ -274,10 +274,16 @@ function HandoverForm({ pkg, onBack, onDelivered }: { pkg: HubPackage; onBack: (
             </>
           ) : (
             <View style={styles.scanIdle}>
-              <Text style={styles.scanHint}>Scan the resident pickup QR, or generate a new OTP below.</Text>
-              <Pressable style={styles.scanButton} onPress={() => void openCamera()}>
-                <Ionicons name="camera-outline" size={14} color="#fff" />
-                <Text style={styles.scanText}>Scan resident QR</Text>
+              <Text style={styles.scanHint}>Regenerate new OTP below if resident lost the OTP.</Text>
+              {/* QR scan disabled until pickup QR is delivered to residents (WhatsApp/SMS). */}
+              <Pressable
+                style={[styles.scanButton, styles.scanButtonDisabled]}
+                disabled
+                accessibilityState={{ disabled: true }}
+                accessibilityLabel="Scan resident QR (temporarily unavailable)"
+              >
+                <Ionicons name="camera-outline" size={14} color="rgba(255,255,255,0.65)" />
+                <Text style={[styles.scanText, styles.scanTextDisabled]}>Scan resident QR</Text>
               </Pressable>
             </View>
           )}
@@ -475,7 +481,9 @@ const styles = StyleSheet.create({
   scanHint: { color: "#244B69", fontSize: 11, lineHeight: 16, textAlign: "center", paddingHorizontal: 8 },
   fieldLabel: { color: "#718096", fontSize: 9, fontWeight: "700", letterSpacing: 1.1, marginBottom: 8 },
   scanButton: { minHeight: 36, borderRadius: 18, paddingHorizontal: 14, backgroundColor: "#244B69", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+  scanButtonDisabled: { backgroundColor: "#7A97AB", opacity: 0.7 },
   scanText: { color: "#fff", fontSize: 11, fontWeight: "700" },
+  scanTextDisabled: { color: "rgba(255,255,255,0.75)" },
   cameraFrame: { height: 220, borderRadius: 12, overflow: "hidden", backgroundColor: "#B8D9EF" },
   closeCamera: { position: "absolute", top: 8, right: 8, width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.55)" },
   inputCard: { paddingHorizontal: 12, paddingVertical: 12, borderRadius: 12, shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 2, elevation: 1 },

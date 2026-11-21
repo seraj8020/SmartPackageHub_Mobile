@@ -136,9 +136,10 @@ export function useLabelScanner() {
   }, []);
 
   function applyResidentFields(resident: ResidentMatch) {
-    if (resident.name) {
+    const resolvedName = (resident.name || resident.unit || "").trim();
+    if (resolvedName) {
       edited.current.name = true;
-      setName(resident.name);
+      setName(resolvedName);
     }
     if (resident.tower) {
       edited.current.tower = true;
