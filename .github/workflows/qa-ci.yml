@@ -1,0 +1,51 @@
+# QA CI for SmartPackageHub Mobile — runs on QA only (not Development).
+# Feature work merges into Development; promote to QA to run CI.
+# EAS cloud builds remain opt-in (manual / separate secrets); this workflow validates the app.
+name: QA Mobile
+
+on:
+  push:
+    branches: [QA]
+  pull_request:
+    branches: [QA]
+  workflow_dispatch:
+
+concurrency:
+  group: qa-mobile-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # Safety: never run from Development even if workflow_dispatch selects it.
+    if: >
+      github.event_name == 'pull_request' ||
+      github.ref == 'refs/heads/QA'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      # Optional EAS build: set repo Variable ENABLE_EAS_BUILD=true and secret EXPO_TOKEN.
+      - name: EAS build (QA profile, Android APK)
+        if: >
+          (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+          github.ref == 'refs/heads/QA' &&
+          vars.ENABLE_EAS_BUILD == 'true'
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::ENABLE_EAS_BUILD=true but EXPO_TOKEN secret is missing."
+            exit 1
+          fi
+          npx eas-cli build --platform android --profile qa --non-interactive

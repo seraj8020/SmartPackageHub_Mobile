@@ -26,8 +26,11 @@ Admin Portal stays in the web UI for now.
 
 ```bash
 cd SmartPackageHub_Mobile
+git checkout Development
 npm install
 ```
+
+Branch flow: merge feature branches into **`Development`**. Promote to **`QA`** to trigger GitHub Actions CI (`QA Mobile`). Pushes to `Development` do **not** run CI. Optional EAS Android build on `QA` when `ENABLE_EAS_BUILD=true` and `EXPO_TOKEN` are set.
 
 Optional API override (see `.env.example`):
 
