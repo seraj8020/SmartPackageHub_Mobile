@@ -20,7 +20,7 @@ Admin Portal stays in the web UI for now.
 
 | Tool | Notes |
 |------|--------|
-| **Node.js** | LTS (20+ recommended) |
+| **Node.js** | LTS (22+ recommended; CI / EAS uses Node 22) |
 | **npm** | Comes with Node |
 | **Git** | Clone / pull the repo |
 
@@ -30,7 +30,9 @@ git checkout Development
 npm install
 ```
 
-Branch flow: merge feature branches into **`Development`**. Promote to **`QA`** to trigger GitHub Actions CI (`QA Mobile`). Pushes to `Development` do **not** run CI. Optional EAS Android build on `QA` when `ENABLE_EAS_BUILD=true` and `EXPO_TOKEN` are set.
+Branch flow: merge feature branches into **`Development`**. Promote to **`QA`** to trigger GitHub Actions CI (`QA Mobile`). Pushes to `Development` do **not** run CI.
+
+On every **`QA`** push (and manual **Run workflow**), CI typechecks then triggers an **EAS Android APK** (`profile: qa`) on [expo.dev → byonverse / SmartPackageHub_Mobile](https://expo.dev/accounts/byonverse/projects/SmartPackageHub_Mobile/builds). Requires repo secret **`EXPO_TOKEN`** (Expo → [Access tokens](https://expo.dev/settings/access-tokens)).
 
 Optional API override (see `.env.example`):
 

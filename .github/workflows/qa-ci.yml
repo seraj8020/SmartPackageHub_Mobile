@@ -1,6 +1,6 @@
 # QA CI for SmartPackageHub Mobile — runs on QA only (not Development).
-# Feature work merges into Development; promote to QA to run CI.
-# EAS cloud builds remain opt-in (manual / separate secrets); this workflow validates the app.
+# Feature work merges into Development; promote to QA to run CI + EAS publish.
+# On QA push, triggers an Android APK build on Expo (https://expo.dev) via EAS.
 name: QA Mobile
 
 on:
@@ -26,7 +26,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          # EAS CLI latest requires Node >= 22
+          node-version: "22"
           cache: npm
 
       - name: Install
@@ -35,17 +36,29 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
-      # Optional EAS build: set repo Variable ENABLE_EAS_BUILD=true and secret EXPO_TOKEN.
+      # Publish Android QA APK to Expo Build (shows under the project on expo.dev).
+      # Requires repo secret EXPO_TOKEN (Expo personal access token).
+      - name: Setup Expo / EAS
+        if: >
+          (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+          github.ref == 'refs/heads/QA'
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+          packager: npm
+
       - name: EAS build (QA profile, Android APK)
         if: >
           (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-          github.ref == 'refs/heads/QA' &&
-          vars.ENABLE_EAS_BUILD == 'true'
+          github.ref == 'refs/heads/QA'
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
           if [ -z "$EXPO_TOKEN" ]; then
-            echo "::error::ENABLE_EAS_BUILD=true but EXPO_TOKEN secret is missing."
+            echo "::error::Missing EXPO_TOKEN secret. Create a token at https://expo.dev/settings/access-tokens then: gh secret set EXPO_TOKEN -R seraj8020/SmartPackageHub_Mobile"
             exit 1
           fi
-          npx eas-cli build --platform android --profile qa --non-interactive
+          # --no-wait: hand off to Expo cloud so GitHub minutes are not spent waiting.
+          # Build progress / APK download: https://expo.dev/accounts/byonverse/projects/SmartPackageHub_Mobile/builds
+          eas build --platform android --profile qa --non-interactive --no-wait
