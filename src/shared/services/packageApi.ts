@@ -1,4 +1,4 @@
-import { API, authHeaders } from "@/shared/services/apiClient";
+import { API, apiFetch, authHeaders } from "@/shared/services/apiClient";
 
 export interface Society {
   id: string;
@@ -123,7 +123,7 @@ export function toHubPackage(row: Record<string, unknown>): HubPackage {
 }
 
 export async function getSocieties(): Promise<Society[]> {
-  const response = await fetch(`${API}/societies`, {
+  const response = await apiFetch(`${API}/societies`, {
     headers: await authHeaders(),
   });
   if (!response.ok) {
@@ -141,7 +141,7 @@ export async function getSocieties(): Promise<Society[]> {
 }
 
 export async function getResidentPackages(residentId: string): Promise<HubPackage[]> {
-  const response = await fetch(
+  const response = await apiFetch(
     `${API}/residents/${encodeURIComponent(residentId)}/packages`,
     { headers: await authHeaders() },
   );
@@ -160,7 +160,7 @@ export async function getResidentPackages(residentId: string): Promise<HubPackag
 
 /** Returns packages that have been collected or delivered by a resident. */
 export async function getResidentHistory(residentId: string): Promise<HistoryItem[]> {
-  const response = await fetch(
+  const response = await apiFetch(
     `${API}/residents/${encodeURIComponent(residentId)}/history`,
     { headers: await authHeaders() },
   );
@@ -188,7 +188,7 @@ export async function getResidentHistory(residentId: string): Promise<HistoryIte
 }
 
 export async function getSocietyPackages(societyId: string): Promise<HubPackage[]> {
-  const response = await fetch(
+  const response = await apiFetch(
     `${API}/societies/${encodeURIComponent(societyId)}/packages`,
     { headers: await authHeaders() },
   );
@@ -214,7 +214,7 @@ export function getSocietyDeliveredPackages(societyId: string): Promise<HubPacka
 }
 
 async function getSocietyPackageList(societyId: string, endpoint: string): Promise<HubPackage[]> {
-  const response = await fetch(
+  const response = await apiFetch(
     `${API}/societies/${encodeURIComponent(societyId)}/${endpoint}`,
     { headers: await authHeaders() },
   );
@@ -230,7 +230,7 @@ export async function markPackageDelivered(
   packageId: string,
   request: DeliverPackageRequest,
 ): Promise<PackageStatusUpdateResponse> {
-  const response = await fetch(`${API}/packages/${encodeURIComponent(packageId)}/deliver`, {
+  const response = await apiFetch(`${API}/packages/${encodeURIComponent(packageId)}/deliver`, {
     method: "POST",
     headers: await authHeaders(),
     body: JSON.stringify(request),
@@ -258,7 +258,7 @@ export interface GeneratePickupOtpResponse {
 export async function generatePackagePickupOtp(
   packageId: string,
 ): Promise<GeneratePickupOtpResponse> {
-  const response = await fetch(
+  const response = await apiFetch(
     `${API}/packages/${encodeURIComponent(packageId)}/pickup-otp`,
     { method: "POST", headers: await authHeaders() },
   );
@@ -288,7 +288,7 @@ export async function generatePackagePickupOtp(
 export async function dispatchPackage(
   packageId: string,
 ): Promise<PackageStatusUpdateResponse> {
-  const response = await fetch(`${API}/packages/${encodeURIComponent(packageId)}/dispatch`, {
+  const response = await apiFetch(`${API}/packages/${encodeURIComponent(packageId)}/dispatch`, {
     method: "PUT",
     headers: await authHeaders(),
   });
@@ -319,7 +319,7 @@ export async function startTowerRoute(
   towerWing: string,
   floor?: number | null,
 ): Promise<StartTowerRouteResponse> {
-  const response = await fetch(
+  const response = await apiFetch(
     `${API}/societies/${encodeURIComponent(societyId)}/tower-route/start`,
     {
       method: "POST",

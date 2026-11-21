@@ -80,11 +80,13 @@ export function usePackageIntake(options: {
     };
   }, [loginName]);
 
-  // OCR often misses tower/flat on rotated Meesho labels — backfill from a firm name match.
+  // When directory match / search pick succeeds, always fill recipient name (+ unit fields).
   useEffect(() => {
     if (matching.match.status !== "matched" || !matching.selected) return;
-    scanner.hydrateEmptyFieldsFromResident(matching.selected);
-  }, [matching.match.status, matching.selected, scanner.hydrateEmptyFieldsFromResident]);
+    scanner.applyResidentFields(matching.selected);
+    // Only re-run when the matched resident identity changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- applyResidentFields is stable enough per selected id
+  }, [matching.match.status, matching.selected?.id]);
 
   function chooseResident(resident: ResidentMatch) {
     matching.selectResident(resident);

@@ -1,4 +1,4 @@
-import { API, authHeaders } from "@/shared/services/apiClient";
+import { API, apiFetch, authHeaders } from "@/shared/services/apiClient";
 import type {
   BookDeliverySlotRequest,
   DeliverySlotAvailability,
@@ -78,7 +78,7 @@ export async function getDeliverySlotAvailability(
     `${API}/delivery-slots/availability` +
     `?societyId=${encodeURIComponent(societyId)}` +
     `&date=${encodeURIComponent(date)}`;
-  const response = await fetch(url, { headers: await authHeaders() });
+  const response = await apiFetch(url, { headers: await authHeaders() });
   if (!response.ok) {
     const err = (await response.json().catch(() => ({}))) as {
       message?: string;
@@ -95,7 +95,7 @@ export async function getDeliverySlotAvailability(
 export async function bookDeliverySlot(
   request: BookDeliverySlotRequest,
 ): Promise<DeliverySlotBooking> {
-  const response = await fetch(`${API}/delivery-slots`, {
+  const response = await apiFetch(`${API}/delivery-slots`, {
     method: "POST",
     headers: await authHeaders(),
     body: JSON.stringify({

@@ -1,4 +1,4 @@
-import { API, authHeaders, authTokenHeader } from "@/shared/services/apiClient";
+import { API, apiFetch, authHeaders, authTokenHeader } from "@/shared/services/apiClient";
 
 const OTHER_ONLY = ["Other"] as const;
 
@@ -76,6 +76,30 @@ async function readError(response: Response, fallback: string): Promise<never> {
   throw new Error(err.message ?? err.Message ?? fallback);
 }
 
+function normalizeResidentMatch(raw: unknown): ResidentMatch {
+  const row = (raw ?? {}) as Record<string, unknown>;
+  const pick = (camel: string, pascal: string) => row[camel] ?? row[pascal];
+  const tower = (pick("tower", "Tower") as string | null | undefined) ?? null;
+  const flatNumber = (pick("flatNumber", "FlatNumber") as string | null | undefined) ?? null;
+  const name = String(pick("name", "Name") ?? "").trim();
+  const unitRaw = String(pick("unit", "Unit") ?? "").trim();
+  const unit =
+    unitRaw ||
+    [tower, flatNumber].filter(Boolean).join("-") ||
+    name ||
+    "Resident";
+  return {
+    id: String(pick("id", "Id") ?? ""),
+    name: name || unit,
+    tower,
+    flatNumber,
+    avatarUrl: (pick("avatarUrl", "AvatarUrl") as string | null | undefined) ?? null,
+    isActive: Boolean(pick("isActive", "IsActive") ?? true),
+    phoneNumber: (pick("phoneNumber", "PhoneNumber") as string | null | undefined) ?? null,
+    unit,
+  };
+}
+
 export async function matchResident(query: {
   tower?: string;
   flat?: string;
@@ -87,11 +111,21 @@ export async function matchResident(query: {
   if (query.flat) params.set("flat", query.flat);
   if (query.name) params.set("name", query.name);
   if (query.societyId) params.set("societyId", query.societyId);
-  const response = await fetch(`${API}/intake/match?${params.toString()}`, {
+  const response = await apiFetch(`${API}/intake/match?${params.toString()}`, {
     headers: await authHeaders(),
   });
   if (!response.ok) await readError(response, `Directory lookup failed (${response.status})`);
-  return response.json() as Promise<MatchResponse>;
+  const body = (await response.json()) as {
+    status?: string;
+    Status?: string;
+    matches?: unknown[];
+    Matches?: unknown[];
+  };
+  const matches = (body.matches ?? body.Matches ?? []).map(normalizeResidentMatch);
+  return {
+    status: String(body.status ?? body.Status ?? "missing"),
+    matches,
+  };
 }
 
 export async function searchResidents(
@@ -102,11 +136,13 @@ export async function searchResidents(
   if (query) params.set("q", query);
   if (societyId) params.set("societyId", societyId);
   const qs = params.toString();
-  const response = await fetch(`${API}/intake/residents${qs ? `?${qs}` : ""}`, {
+  const response = await apiFetch(`${API}/intake/residents${qs ? `?${qs}` : ""}`, {
     headers: await authHeaders(),
   });
   if (!response.ok) await readError(response, `Resident search failed (${response.status})`);
-  return response.json() as Promise<ResidentMatch[]>;
+  const body = (await response.json()) as unknown;
+  const rows = Array.isArray(body) ? body : [];
+  return rows.map(normalizeResidentMatch);
 }
 
 /** Carrier names for the scan courier dropdown from society CourierAgents (DB). */
@@ -114,7 +150,7 @@ export async function getIntakeCarriers(societyId?: string | null): Promise<stri
   const params = new URLSearchParams();
   if (societyId) params.set("societyId", societyId);
   const qs = params.toString();
-  const response = await fetch(`${API}/intake/carriers${qs ? `?${qs}` : ""}`, {
+  const response = await apiFetch(`${API}/intake/carriers${qs ? `?${qs}` : ""}`, {
     headers: await authHeaders(),
   });
   if (!response.ok) {
@@ -147,7 +183,7 @@ export function sortCarriersForDropdown(carriers: readonly string[]): string[] {
 export async function confirmIntake(
   payload: ConfirmIntakePayload,
 ): Promise<ConfirmIntakeResult> {
-  const response = await fetch(`${API}/intake/confirm`, {
+  const response = await apiFetch(`${API}/intake/confirm`, {
     method: "POST",
     headers: await authHeaders(),
     body: JSON.stringify(payload),
@@ -176,7 +212,7 @@ export interface BatchIntakeResult {
 export async function batchConfirmIntake(
   items: ConfirmIntakePayload[],
 ): Promise<BatchIntakeResult> {
-  const response = await fetch(`${API}/intake/batch-intake`, {
+  const response = await apiFetch(`${API}/intake/batch-intake`, {
     method: "POST",
     headers: await authHeaders(),
     body: JSON.stringify({ items }),
@@ -213,7 +249,7 @@ export async function suggestShelf(
     params.set("isColdStorage", String(options.isColdStorage));
   }
   const query = params.toString();
-  const response = await fetch(`${API}/intake/shelf${query ? `?${query}` : ""}`, {
+  const response = await apiFetch(`${API}/intake/shelf${query ? `?${query}` : ""}`, {
     headers: await authHeaders(),
   });
   if (!response.ok) await readError(response, `Shelf suggestion failed (${response.status})`);
@@ -226,7 +262,7 @@ export async function assignShelf(
   shelfCode: string,
   isColdStorage = false,
 ): Promise<ConfirmIntakeResult> {
-  const response = await fetch(`${API}/packages/${encodeURIComponent(packageId)}/shelf`, {
+  const response = await apiFetch(`${API}/packages/${encodeURIComponent(packageId)}/shelf`, {
     method: "POST",
     headers: await authHeaders(),
     body: JSON.stringify({ shelfCode, isColdStorage }),
@@ -238,7 +274,7 @@ export async function assignShelf(
 export async function approveCod(
   packageId: string,
 ): Promise<{ succeeded: boolean; message?: string; pickupOtp?: string }> {
-  const response = await fetch(
+  const response = await apiFetch(
     `${API}/packages/${encodeURIComponent(packageId)}/cod/approve`,
     { method: "POST", headers: await authHeaders() },
   );
@@ -249,7 +285,7 @@ export async function approveCod(
 export async function rejectCod(
   packageId: string,
 ): Promise<{ succeeded: boolean; message?: string }> {
-  const response = await fetch(
+  const response = await apiFetch(
     `${API}/packages/${encodeURIComponent(packageId)}/cod/reject`,
     { method: "POST", headers: await authHeaders() },
   );
@@ -267,7 +303,7 @@ export async function uploadDamagePhoto(
   const markerIndex = imageBase64.indexOf(marker);
   const payload =
     markerIndex >= 0 ? imageBase64.slice(markerIndex + marker.length) : imageBase64;
-  const response = await fetch(`${API}/intake/${intakeId}/damage`, {
+  const response = await apiFetch(`${API}/intake/${intakeId}/damage`, {
     method: "POST",
     headers: await authHeaders(),
     body: JSON.stringify({ imageBase64: payload, note }),
@@ -286,7 +322,7 @@ export async function uploadParcelPhoto(
     name: "parcel.jpg",
     type: "image/jpeg",
   } as unknown as Blob);
-  const response = await fetch(`${API}/intake/photos`, {
+  const response = await apiFetch(`${API}/intake/photos`, {
     method: "POST",
     headers: await authTokenHeader(),
     body: form,
