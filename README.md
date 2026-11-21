@@ -20,7 +20,7 @@ Admin Portal stays in the web UI for now.
 
 | Tool | Notes |
 |------|--------|
-| **Node.js** | LTS (20+ recommended) |
+| **Node.js** | LTS (22+ recommended; CI / EAS uses Node 22) |
 | **npm** | Comes with Node |
 | **Git** | Clone / pull the repo |
 
