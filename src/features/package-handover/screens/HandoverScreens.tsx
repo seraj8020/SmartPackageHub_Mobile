@@ -162,9 +162,11 @@ export function StaffHandoverScreen({ societyId }: { societyId: string }) {
             <View style={styles.packageInfo}>
               <View style={styles.rowBetween}>
                 <Text style={styles.recipient} numberOfLines={1}>{pkg.recipientName || "Recipient"}</Text>
-                <Text style={styles.unit}>{formatUnitLabel(pkg.tower, pkg.flat)}</Text>
+                <Text style={styles.unit} numberOfLines={1}>{formatUnitLabel(pkg.tower, pkg.flat)}</Text>
               </View>
-              <Text style={styles.courier} numberOfLines={1}>{pkg.courier}</Text>
+              <View style={styles.courierChip}>
+                <Text style={styles.courier} numberOfLines={1}>{pkg.courier}</Text>
+              </View>
               <Text style={styles.tracking} numberOfLines={1}>{pkg.tracking}</Text>
               {pkg.weight ? <Text style={styles.weight}>{pkg.weight}</Text> : null}
               {pkg.deliverySlotLabel ? <Text style={[styles.slot, pkg.deliverySlotStatus === "default" ? styles.defaultSlot : styles.bookedSlot]}>
@@ -221,9 +223,10 @@ function HandoverForm({ pkg, onBack, onDelivered }: { pkg: HubPackage; onBack: (
     try {
       const result = await generatePackagePickupOtp(pkg.id);
       setGeneratedOtp(result.pickupOtp);
+      setOtp(result.pickupOtp);
       setOtpNotice(result.message ?? (result.smsQueued
-        ? "The new code was sent to the resident."
-        : "Code created, but the resident notification was not queued."));
+        ? "SMS queued to the resident. Confirm the code below, then verify."
+        : "Code created, but SMS was not queued. Share the displayed OTP with the resident."));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to generate a new pickup code.");
     } finally {
@@ -270,34 +273,38 @@ function HandoverForm({ pkg, onBack, onDelivered }: { pkg: HubPackage; onBack: (
               <Pressable style={styles.closeCamera} onPress={() => setCameraOpen(false)}><Ionicons name="close" size={20} color="#fff" /></Pressable>
             </>
           ) : (
-            <Pressable style={styles.scanButton} onPress={() => void openCamera()}>
-              <Ionicons name="camera-outline" size={13} color="#fff" />
-              <Text style={styles.scanText}>Scan resident QR</Text>
-            </Pressable>
+            <View style={styles.scanIdle}>
+              <Text style={styles.scanHint}>Scan the resident pickup QR, or generate a new OTP below.</Text>
+              <Pressable style={styles.scanButton} onPress={() => void openCamera()}>
+                <Ionicons name="camera-outline" size={14} color="#fff" />
+                <Text style={styles.scanText}>Scan resident QR</Text>
+              </Pressable>
+            </View>
           )}
         </View>
 
         <View style={[CARD, styles.inputCard]}>
-          <View style={styles.otpHeading}>
-            <Text style={[styles.fieldLabel, styles.otpHeadingLabel]}>PICKUP CODE</Text>
-            <Pressable
-              style={({ pressed }) => [styles.generateOtpButton, pressed && styles.generateOtpPressed, generatingOtp && styles.generateOtpDisabled]}
-              onPress={() => void generateOtp()}
-              disabled={generatingOtp || busy}
-              accessibilityRole="button"
-              accessibilityLabel="Generate and send a new pickup OTP"
-            >
-              {generatingOtp ? <ActivityIndicator size="small" color={colors.primary} /> : <Ionicons name="refresh-outline" size={14} color={colors.primary} />}
-              <Text style={styles.generateOtpText}>{generatingOtp ? "Generating…" : "Generate new OTP"}</Text>
-            </Pressable>
-          </View>
+          <Text style={styles.fieldLabel}>PICKUP CODE</Text>
+          <Pressable
+            style={({ pressed }) => [styles.generateOtpButton, pressed && styles.generateOtpPressed, generatingOtp && styles.generateOtpDisabled]}
+            onPress={() => void generateOtp()}
+            disabled={generatingOtp || busy}
+            accessibilityRole="button"
+            accessibilityLabel="Generate and send a new pickup OTP"
+          >
+            {generatingOtp ? <ActivityIndicator size="small" color={colors.primary} /> : <Ionicons name="refresh-outline" size={15} color={colors.primary} />}
+            <Text style={styles.generateOtpText}>{generatingOtp ? "Generating…" : "Generate new OTP & SMS"}</Text>
+          </Pressable>
           {generatedOtp ? (
             <View style={styles.generatedOtpBox}>
               <Text style={styles.generatedOtpLabel}>NEW RESIDENT OTP</Text>
-              <Text style={styles.generatedOtpValue}>{generatedOtp}</Text>
+              <Text style={styles.generatedOtpValue}>{generatedOtp.replace(/(\d{3})(?=\d)/, "$1 ")}</Text>
               {otpNotice ? <Text style={styles.otpNotice}>{otpNotice}</Text> : null}
             </View>
-          ) : <Text style={styles.otpPrompt}>Generate a code to send a fresh pickup OTP to the resident.</Text>}
+          ) : (
+            <Text style={styles.otpPrompt}>Generate a fresh 6-digit code — it is SMS’d to the resident and filled below for verify.</Text>
+          )}
+          <Text style={styles.enterLabel}>ENTER / CONFIRM OTP</Text>
           <TextInput
             style={styles.otpInput}
             keyboardType="number-pad"
@@ -331,10 +338,12 @@ function HandoverForm({ pkg, onBack, onDelivered }: { pkg: HubPackage; onBack: (
 }
 
 function MethodOption({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
-  return <Pressable onPress={onPress} style={styles.methodOption}>
-    <Ionicons name={selected ? "radio-button-on" : "radio-button-off"} size={19} color={selected ? colors.primary : "#9CA3AF"} />
-    <Text style={styles.methodText}>{label}</Text>
-  </Pressable>;
+  return (
+    <Pressable onPress={onPress} style={[styles.methodOption, selected && styles.methodOptionSelected]}>
+      <Ionicons name={selected ? "radio-button-on" : "radio-button-off"} size={19} color={selected ? colors.primary : "#9CA3AF"} />
+      <Text style={[styles.methodText, selected && styles.methodTextSelected]}>{label}</Text>
+    </Pressable>
+  );
 }
 
 export function StaffDoneScreen({ societyId }: { societyId: string }) {
@@ -378,8 +387,13 @@ export function StaffDoneScreen({ societyId }: { societyId: string }) {
           <View key={pkg.id} style={[CARD, styles.deliveredCard]}>
             <View style={styles.deliveredHeader}>
               <View style={styles.packageInfo}>
-                <View style={styles.rowBetween}><Text style={styles.recipient} numberOfLines={1}>{pkg.recipientName || "Recipient"}</Text><Text style={styles.unit}>Flat {pkg.flat}</Text></View>
-                <Text style={styles.courier} numberOfLines={1}>{pkg.courier}</Text>
+                <View style={styles.rowBetween}>
+                  <Text style={styles.recipient} numberOfLines={1}>{pkg.recipientName || "Recipient"}</Text>
+                  <Text style={styles.unit} numberOfLines={1}>{formatUnitLabel(pkg.tower, pkg.flat)}</Text>
+                </View>
+                <View style={styles.courierChip}>
+                  <Text style={styles.courier} numberOfLines={1}>{pkg.courier}</Text>
+                </View>
                 <Text style={styles.tracking} numberOfLines={1}>{pkg.tracking}</Text>
               </View>
             </View>
@@ -434,12 +448,13 @@ const styles = StyleSheet.create({
   packageCard: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 11, paddingVertical: 10, borderRadius: 14, shadowColor: "#000", shadowOpacity: 0.08, shadowRadius: 2, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
   packageInfo: { flex: 1, minWidth: 0 },
   rowBetween: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
-  recipient: { flex: 1, color: colors.primary, fontSize: 13, fontWeight: "700" },
-  unit: { color: "#9CA3AF", fontSize: 10, fontFamily: "monospace" },
-  courier: { color: "#7C3E00", backgroundColor: "#FFEDD5", borderRadius: 9, paddingHorizontal: 7, paddingVertical: 2, fontSize: 8, fontWeight: "600", marginTop: 3, overflow: "hidden" },
-  tracking: { color: "#6B7280", fontSize: 8, fontFamily: "monospace", marginTop: 3 },
-  weight: { color: "#9CA3AF", fontSize: 8, marginTop: 2 },
-  slot: { alignSelf: "flex-start", overflow: "hidden", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3, fontSize: 8, fontWeight: "700", marginTop: 4 },
+  recipient: { flex: 1, minWidth: 0, color: colors.primary, fontSize: 13, fontWeight: "700" },
+  unit: { flexShrink: 0, maxWidth: "42%", color: "#9CA3AF", fontSize: 10, fontFamily: "monospace", textAlign: "right" },
+  courierChip: { alignSelf: "flex-start", backgroundColor: "#FFEDD5", borderRadius: 9, paddingHorizontal: 8, paddingVertical: 3, marginTop: 5 },
+  courier: { color: "#7C3E00", fontSize: 9, fontWeight: "700" },
+  tracking: { color: "#6B7280", fontSize: 10, fontFamily: "monospace", marginTop: 4 },
+  weight: { color: "#9CA3AF", fontSize: 9, marginTop: 2 },
+  slot: { alignSelf: "flex-start", overflow: "hidden", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3, fontSize: 9, fontWeight: "700", marginTop: 5 },
   defaultSlot: { backgroundColor: "#FFFBEB", color: "#92400E" },
   bookedSlot: { backgroundColor: "#ECFDF5", color: "#065F46" },
   pressed: { opacity: 0.78 },
@@ -451,42 +466,45 @@ const styles = StyleSheet.create({
   empty: { alignItems: "center", paddingHorizontal: 16, paddingVertical: 24 },
   emptyTitle: { color: "#4B5563", fontSize: 13, fontWeight: "700", marginTop: 8 },
   emptyText: { color: "#9CA3AF", fontSize: 11, lineHeight: 17, textAlign: "center", marginTop: 4 },
-  form: { paddingHorizontal: 12, paddingTop: 12, paddingBottom: 22, gap: 9 },
-  packageSummary: { paddingHorizontal: 12, paddingVertical: 11, borderRadius: 12, shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 2, elevation: 1 },
-  summaryTracking: { color: "#1A2332", fontSize: 11, fontWeight: "700", fontFamily: "monospace" },
-  summaryMeta: { color: "#6B7280", fontSize: 9, marginTop: 3 },
-  scannerCard: { height: 128, borderRadius: 12, overflow: "hidden", backgroundColor: "#B8D9EF", justifyContent: "flex-end", padding: 12 },
-  fieldLabel: { color: "#718096", fontSize: 8, fontWeight: "700", letterSpacing: 1.1, marginBottom: 8 },
-  scanButton: { minHeight: 26, alignSelf: "flex-start", borderRadius: 14, paddingHorizontal: 9, backgroundColor: "#244B69", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5 },
-  scanText: { color: "#fff", fontSize: 8, fontWeight: "700" },
+  form: { paddingHorizontal: 12, paddingTop: 12, paddingBottom: 28, gap: 10 },
+  packageSummary: { paddingHorizontal: 12, paddingVertical: 12, borderRadius: 12, shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 2, elevation: 1 },
+  summaryTracking: { color: "#1A2332", fontSize: 12, fontWeight: "700", fontFamily: "monospace" },
+  summaryMeta: { color: "#6B7280", fontSize: 10, marginTop: 4 },
+  scannerCard: { minHeight: 128, borderRadius: 12, overflow: "hidden", backgroundColor: "#B8D9EF", justifyContent: "center", padding: 14 },
+  scanIdle: { alignItems: "center", justifyContent: "center", gap: 10 },
+  scanHint: { color: "#244B69", fontSize: 11, lineHeight: 16, textAlign: "center", paddingHorizontal: 8 },
+  fieldLabel: { color: "#718096", fontSize: 9, fontWeight: "700", letterSpacing: 1.1, marginBottom: 8 },
+  scanButton: { minHeight: 36, borderRadius: 18, paddingHorizontal: 14, backgroundColor: "#244B69", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+  scanText: { color: "#fff", fontSize: 11, fontWeight: "700" },
   cameraFrame: { height: 220, borderRadius: 12, overflow: "hidden", backgroundColor: "#B8D9EF" },
   closeCamera: { position: "absolute", top: 8, right: 8, width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.55)" },
-  inputCard: { paddingHorizontal: 12, paddingVertical: 11, borderRadius: 12, shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 2, elevation: 1 },
-  otpHeading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 },
-  otpHeadingLabel: { marginBottom: 0 },
-  generateOtpButton: { minHeight: 34, borderRadius: 9, paddingHorizontal: 9, backgroundColor: "#EEF4F8", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5 },
+  inputCard: { paddingHorizontal: 12, paddingVertical: 12, borderRadius: 12, shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 2, elevation: 1 },
+  generateOtpButton: { minHeight: 40, width: "100%", borderRadius: 10, paddingHorizontal: 12, marginBottom: 10, backgroundColor: "#EEF4F8", borderWidth: 1, borderColor: "#D7E6F0", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
   generateOtpPressed: { opacity: 0.7 },
   generateOtpDisabled: { opacity: 0.55 },
-  generateOtpText: { color: colors.primary, fontSize: 10, fontWeight: "700" },
-  generatedOtpBox: { backgroundColor: "#F0FDF4", borderColor: "#BBF7D0", borderWidth: 1, borderRadius: 10, paddingHorizontal: 11, paddingVertical: 9, marginBottom: 9, alignItems: "center" },
-  generatedOtpLabel: { color: "#15803D", fontSize: 8, fontWeight: "800", letterSpacing: 1 },
-  generatedOtpValue: { color: colors.primary, fontSize: 23, fontWeight: "800", letterSpacing: 5, fontFamily: "monospace", marginTop: 3 },
-  otpNotice: { color: "#166534", fontSize: 9, marginTop: 4, textAlign: "center" },
-  otpPrompt: { color: "#6B7280", fontSize: 10, marginBottom: 8 },
-  otpInput: { height: 42, borderRadius: 10, borderWidth: 1, borderColor: "#E5E7EB", backgroundColor: "#F8F7F4", textAlign: "center", color: "#7090A9", fontSize: 16, fontWeight: "700", letterSpacing: 5, fontFamily: "monospace" },
-  methodCard: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 2, elevation: 1 },
-  preference: { color: "#6B7280", fontSize: 9, lineHeight: 14, marginBottom: 5 },
+  generateOtpText: { color: colors.primary, fontSize: 12, fontWeight: "700" },
+  generatedOtpBox: { backgroundColor: "#F0FDF4", borderColor: "#BBF7D0", borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 10, alignItems: "center" },
+  generatedOtpLabel: { color: "#15803D", fontSize: 9, fontWeight: "800", letterSpacing: 1 },
+  generatedOtpValue: { color: colors.primary, fontSize: 24, fontWeight: "800", letterSpacing: 4, fontFamily: "monospace", marginTop: 4 },
+  otpNotice: { color: "#166534", fontSize: 10, lineHeight: 14, marginTop: 6, textAlign: "center" },
+  otpPrompt: { color: "#6B7280", fontSize: 11, lineHeight: 15, marginBottom: 10 },
+  enterLabel: { color: "#718096", fontSize: 9, fontWeight: "700", letterSpacing: 1, marginBottom: 6 },
+  otpInput: { height: 46, borderRadius: 10, borderWidth: 1, borderColor: "#E5E7EB", backgroundColor: "#F8F7F4", textAlign: "center", color: colors.primary, fontSize: 18, fontWeight: "700", letterSpacing: 5, fontFamily: "monospace" },
+  methodCard: { paddingHorizontal: 12, paddingVertical: 12, borderRadius: 12, shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 2, elevation: 1 },
+  preference: { color: "#6B7280", fontSize: 10, lineHeight: 15, marginBottom: 8 },
   preferenceStrong: { color: colors.primary, fontWeight: "700" },
-  methodOption: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 5 },
-  methodsRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  methodText: { color: "#374151", fontSize: 10, fontWeight: "500" },
+  methodOption: { flex: 1, flexDirection: "row", alignItems: "center", gap: 6, minHeight: 40, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: "#E5E7EB", backgroundColor: "#F8FAFC" },
+  methodOptionSelected: { borderColor: "#93C5FD", backgroundColor: "#EFF6FF" },
+  methodsRow: { flexDirection: "row", alignItems: "stretch", gap: 8 },
+  methodText: { color: "#374151", fontSize: 11, fontWeight: "600", flexShrink: 1 },
+  methodTextSelected: { color: colors.primary },
   errorBox: { backgroundColor: "#FBE8D8", borderColor: "#F5D1B5", borderWidth: 1, borderRadius: 11, paddingHorizontal: 13, paddingVertical: 10 },
   handoverError: { color: "#9A5B2E", fontSize: 11, lineHeight: 17, fontWeight: "500" },
-  verifyButton: { minHeight: 43, borderRadius: 12, backgroundColor: "#22C55E", alignItems: "center", justifyContent: "center", paddingHorizontal: 14, marginTop: 1 },
+  verifyButton: { minHeight: 46, borderRadius: 12, backgroundColor: "#22C55E", alignItems: "center", justifyContent: "center", paddingHorizontal: 14, marginTop: 2 },
   verifyPressed: { opacity: 0.72 },
   verifyText: { color: "#fff", fontSize: 13, fontWeight: "800" },
-  deliveredCard: { borderColor: "#6EE7B7", padding: 10, borderRadius: 13, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
+  deliveredCard: { borderColor: "#6EE7B7", padding: 12, borderRadius: 13, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
   deliveredHeader: { flexDirection: "row", gap: 8, marginBottom: 8 },
-  deliveredBadge: { minHeight: 33, backgroundColor: "#ECFDF5", borderRadius: 9, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5 },
+  deliveredBadge: { minHeight: 34, backgroundColor: "#ECFDF5", borderRadius: 9, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingHorizontal: 8 },
   deliveredText: { color: "#059669", fontSize: 10, fontWeight: "800" },
 });
