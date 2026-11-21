@@ -27,11 +27,8 @@ export function SafeBottomTabBar(props: BottomTabBarProps) {
       <BottomTabBar
         {...props}
         insets={{ top: 0, right: 0, bottom: 0, left: 0 }}
-        style={[
-          styles.bar,
-          { height: TAB_CONTENT_HEIGHT },
-          props.style,
-        ]}
+        // BottomTabBarProps no longer exposes `style`; apply bar chrome here.
+        style={[styles.bar, { height: TAB_CONTENT_HEIGHT }]}
       />
     </View>
   );

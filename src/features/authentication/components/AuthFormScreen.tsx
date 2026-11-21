@@ -5,6 +5,7 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
+  type ScrollViewInstance,
 } from "react-native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { colors } from "@/shared/theme/colors";
@@ -19,7 +20,7 @@ type Props = {
  */
 export function AuthFormScreen({ children }: Props) {
   const headerHeight = useHeaderHeight();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const [keyboardPad, setKeyboardPad] = useState(0);
 
   useEffect(() => {
