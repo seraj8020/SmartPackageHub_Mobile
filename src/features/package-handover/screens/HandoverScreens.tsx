@@ -16,6 +16,7 @@ import { colors } from "@/shared/theme/colors";
 import {
   getSocietyDeliveredPackages,
   getSocietyDispatchedPackages,
+  generatePackagePickupOtp,
   markPackageDelivered,
   type DeliveryMethod,
   type HubPackage,
@@ -180,11 +181,15 @@ export function StaffHandoverScreen({ societyId }: { societyId: string }) {
 
 function HandoverForm({ pkg, onBack, onDelivered }: { pkg: HubPackage; onBack: () => void; onDelivered: (packageId: string) => void }) {
   const [otp, setOtp] = useState("");
+  const [generatedOtp, setGeneratedOtp] = useState("");
+  const [otpNotice, setOtpNotice] = useState("");
+  const [generatingOtp, setGeneratingOtp] = useState(false);
   const [method, setMethod] = useState<DeliveryMethod>(pkg.preferredDeliveryMethod === "CounterPickup" ? "CounterPickup" : "DoorDelivery");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
+  const otpActionRef = useRef<"generate" | "deliver" | null>(null);
 
   async function openCamera() {
     if (!permission?.granted) {
@@ -196,6 +201,7 @@ function HandoverForm({ pkg, onBack, onDelivered }: { pkg: HubPackage; onBack: (
   }
 
   function onCodeDetected(result: BarcodeScanningResult) {
+    if (otpActionRef.current) return;
     // Resident QR from API: SPH|{pkgNumber}|{otp} — take the OTP segment, not pkg digits.
     const digits = extractPickupOtp(result.data);
     if (!digits) return;
@@ -203,9 +209,34 @@ function HandoverForm({ pkg, onBack, onDelivered }: { pkg: HubPackage; onBack: (
     setCameraOpen(false);
   }
 
+  async function generateOtp() {
+    if (otpActionRef.current) return;
+    otpActionRef.current = "generate";
+    setGeneratingOtp(true);
+    setError(null);
+    setOtpNotice("");
+    setGeneratedOtp("");
+    setOtp("");
+    setCameraOpen(false);
+    try {
+      const result = await generatePackagePickupOtp(pkg.id);
+      setGeneratedOtp(result.pickupOtp);
+      setOtpNotice(result.message ?? (result.smsQueued
+        ? "The new code was sent to the resident."
+        : "Code created, but the resident notification was not queued."));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to generate a new pickup code.");
+    } finally {
+      otpActionRef.current = null;
+      setGeneratingOtp(false);
+    }
+  }
+
   async function submit() {
-    const token = otp.replace(/\D/g, "").slice(0, 6);
-    if (!token) { setError("Enter the resident OTP to continue."); return; }
+    if (otpActionRef.current) return;
+    const token = otp.replace(/\D/g, "");
+    if (!/^\d{6}$/.test(token)) { setError("Enter the complete 6-digit resident OTP."); return; }
+    otpActionRef.current = "deliver";
     setBusy(true);
     setError(null);
     try {
@@ -214,7 +245,10 @@ function HandoverForm({ pkg, onBack, onDelivered }: { pkg: HubPackage; onBack: (
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unable to verify OTP and deliver package.";
       setError(/invalid|expired|otp|token|code/i.test(message) ? "Invalid or expired code. The package remains in the handover list." : message);
-    } finally { setBusy(false); }
+    } finally {
+      otpActionRef.current = null;
+      setBusy(false);
+    }
   }
 
   const unit = formatUnitLabel(pkg.tower, pkg.flat);
@@ -244,13 +278,33 @@ function HandoverForm({ pkg, onBack, onDelivered }: { pkg: HubPackage; onBack: (
         </View>
 
         <View style={[CARD, styles.inputCard]}>
-          <Text style={styles.fieldLabel}>OR ENTER PICKUP CODE</Text>
+          <View style={styles.otpHeading}>
+            <Text style={[styles.fieldLabel, styles.otpHeadingLabel]}>PICKUP CODE</Text>
+            <Pressable
+              style={({ pressed }) => [styles.generateOtpButton, pressed && styles.generateOtpPressed, generatingOtp && styles.generateOtpDisabled]}
+              onPress={() => void generateOtp()}
+              disabled={generatingOtp || busy}
+              accessibilityRole="button"
+              accessibilityLabel="Generate and send a new pickup OTP"
+            >
+              {generatingOtp ? <ActivityIndicator size="small" color={colors.primary} /> : <Ionicons name="refresh-outline" size={14} color={colors.primary} />}
+              <Text style={styles.generateOtpText}>{generatingOtp ? "Generating…" : "Generate new OTP"}</Text>
+            </Pressable>
+          </View>
+          {generatedOtp ? (
+            <View style={styles.generatedOtpBox}>
+              <Text style={styles.generatedOtpLabel}>NEW RESIDENT OTP</Text>
+              <Text style={styles.generatedOtpValue}>{generatedOtp}</Text>
+              {otpNotice ? <Text style={styles.otpNotice}>{otpNotice}</Text> : null}
+            </View>
+          ) : <Text style={styles.otpPrompt}>Generate a code to send a fresh pickup OTP to the resident.</Text>}
           <TextInput
             style={styles.otpInput}
             keyboardType="number-pad"
             textContentType="oneTimeCode"
             autoComplete="one-time-code"
             maxLength={7}
+            editable={!generatingOtp && !busy}
             placeholder="000 000"
             placeholderTextColor="#9CA3AF"
             value={otp.replace(/(\d{3})(?=\d)/, "$1 ")}
@@ -268,7 +322,7 @@ function HandoverForm({ pkg, onBack, onDelivered }: { pkg: HubPackage; onBack: (
         </View>
 
         {error ? <View style={styles.errorBox}><Text style={styles.handoverError}>{error}</Text></View> : null}
-        <Pressable style={({ pressed }) => [styles.verifyButton, (busy || pressed) && styles.verifyPressed]} onPress={() => void submit()} disabled={busy}>
+        <Pressable style={({ pressed }) => [styles.verifyButton, (busy || generatingOtp || pressed) && styles.verifyPressed]} onPress={() => void submit()} disabled={busy || generatingOtp}>
           {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.verifyText}>Verify and mark delivered</Text>}
         </Pressable>
       </ScrollView>
@@ -408,6 +462,17 @@ const styles = StyleSheet.create({
   cameraFrame: { height: 220, borderRadius: 12, overflow: "hidden", backgroundColor: "#B8D9EF" },
   closeCamera: { position: "absolute", top: 8, right: 8, width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.55)" },
   inputCard: { paddingHorizontal: 12, paddingVertical: 11, borderRadius: 12, shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 2, elevation: 1 },
+  otpHeading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 },
+  otpHeadingLabel: { marginBottom: 0 },
+  generateOtpButton: { minHeight: 34, borderRadius: 9, paddingHorizontal: 9, backgroundColor: "#EEF4F8", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5 },
+  generateOtpPressed: { opacity: 0.7 },
+  generateOtpDisabled: { opacity: 0.55 },
+  generateOtpText: { color: colors.primary, fontSize: 10, fontWeight: "700" },
+  generatedOtpBox: { backgroundColor: "#F0FDF4", borderColor: "#BBF7D0", borderWidth: 1, borderRadius: 10, paddingHorizontal: 11, paddingVertical: 9, marginBottom: 9, alignItems: "center" },
+  generatedOtpLabel: { color: "#15803D", fontSize: 8, fontWeight: "800", letterSpacing: 1 },
+  generatedOtpValue: { color: colors.primary, fontSize: 23, fontWeight: "800", letterSpacing: 5, fontFamily: "monospace", marginTop: 3 },
+  otpNotice: { color: "#166534", fontSize: 9, marginTop: 4, textAlign: "center" },
+  otpPrompt: { color: "#6B7280", fontSize: 10, marginBottom: 8 },
   otpInput: { height: 42, borderRadius: 10, borderWidth: 1, borderColor: "#E5E7EB", backgroundColor: "#F8F7F4", textAlign: "center", color: "#7090A9", fontSize: 16, fontWeight: "700", letterSpacing: 5, fontFamily: "monospace" },
   methodCard: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 2, elevation: 1 },
   preference: { color: "#6B7280", fontSize: 9, lineHeight: 14, marginBottom: 5 },

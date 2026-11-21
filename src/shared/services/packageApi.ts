@@ -248,6 +248,43 @@ export async function markPackageDelivered(
   return { success: true, packageId, message };
 }
 
+export interface GeneratePickupOtpResponse {
+  pickupOtp: string;
+  smsQueued: boolean;
+  message?: string;
+}
+
+/** Generates and texts a replacement pickup OTP for one dispatched package. */
+export async function generatePackagePickupOtp(
+  packageId: string,
+): Promise<GeneratePickupOtpResponse> {
+  const response = await fetch(
+    `${API}/packages/${encodeURIComponent(packageId)}/pickup-otp`,
+    { method: "POST", headers: await authHeaders() },
+  );
+  const body = (await response.json().catch(() => ({}))) as {
+    succeeded?: boolean;
+    Succeeded?: boolean;
+    pickupOtp?: string;
+    PickupOtp?: string;
+    message?: string;
+    Message?: string;
+    smsQueued?: boolean;
+    SmsQueued?: boolean;
+  };
+  const message = body.message ?? body.Message;
+  if (!response.ok || body.succeeded === false || body.Succeeded === false) {
+    throw new Error(message ?? `Pickup OTP generation failed (${response.status})`);
+  }
+  const pickupOtp = body.pickupOtp ?? body.PickupOtp;
+  if (!pickupOtp) throw new Error(message ?? "The server did not return a pickup OTP.");
+  return {
+    pickupOtp,
+    smsQueued: body.smsQueued ?? body.SmsQueued ?? false,
+    message,
+  };
+}
+
 export async function dispatchPackage(
   packageId: string,
 ): Promise<PackageStatusUpdateResponse> {
