@@ -28,6 +28,7 @@ import {
   isDispatchedPackagesCacheFresh,
   setCachedDispatchedPackages,
 } from "@/features/package-handover/services/handoverPackageCache";
+import { getVacationHold } from "@/features/vacation-hold/services/vacationHoldApi";
 
 const CARD = { backgroundColor: "#fff", borderRadius: 16, borderWidth: 1, borderColor: "rgba(0,0,0,0.06)" } as const;
 
@@ -39,7 +40,31 @@ export function StaffHandoverScreen({ societyId }: { societyId: string }) {
   const [selected, setSelected] = useState<HubPackage | null>(null);
   const [query, setQuery] = useState("");
   const [reload, setReload] = useState(0);
+  const [vacationStatuses, setVacationStatuses] = useState<Record<string, "active" | "clear" | "unknown">>({});
   const processedRefreshRef = useRef(0);
+
+  const loadVacationStatuses = useCallback(async (rows: HubPackage[]) => {
+    const residentIds = [...new Set(rows.map((pkg) => pkg.residentId).filter((id): id is string => Boolean(id)))];
+    if (residentIds.length === 0) {
+      setVacationStatuses({});
+      return;
+    }
+    setVacationStatuses((current) => {
+      const next: Record<string, "active" | "clear" | "unknown"> = {};
+      residentIds.forEach((id) => { next[id] = current[id] ?? "unknown"; });
+      return next;
+    });
+    const results = await Promise.all(residentIds.map(async (residentId) => {
+      try {
+        const hold = await getVacationHold(residentId);
+        return [residentId, hold?.isActive ? "active" : "clear"] as const;
+      } catch {
+        // Do not allow the handover action when the hold status cannot be verified.
+        return [residentId, "unknown"] as const;
+      }
+    }));
+    setVacationStatuses(Object.fromEntries(results));
+  }, []);
 
   useFocusEffect(useCallback(() => {
     if (!societyId) return undefined;
@@ -66,7 +91,10 @@ export function StaffHandoverScreen({ societyId }: { societyId: string }) {
   useFocusEffect(useCallback(() => {
     let active = true;
     const cachedPackages = getCachedDispatchedPackages(societyId);
-    if (cachedPackages) setPackages(cachedPackages);
+    if (cachedPackages) {
+      setPackages(cachedPackages);
+      void loadVacationStatuses(cachedPackages);
+    }
     const forcedRefresh = reload > processedRefreshRef.current;
     const shouldFetch = forcedRefresh || !isDispatchedPackagesCacheFresh(societyId);
     if (forcedRefresh) processedRefreshRef.current = reload;
@@ -97,14 +125,17 @@ export function StaffHandoverScreen({ societyId }: { societyId: string }) {
             ]
           : fetchedRows;
         setCachedDispatchedPackages(societyId, dispatchedRows);
-        if (active) setPackages(dispatchedRows);
+        if (active) {
+          setPackages(dispatchedRows);
+          void loadVacationStatuses(dispatchedRows);
+        }
       })
       .catch((err: unknown) => {
         if (active && !cachedPackages) setError(err instanceof Error ? err.message : "Unable to load dispatched packages.");
       })
       .finally(() => { if (active) { setLoading(false); setRefreshing(false); } });
     return () => { active = false; };
-  }, [societyId, reload]));
+  }, [societyId, reload, loadVacationStatuses]));
 
   const refresh = useCallback(() => { setRefreshing(true); setReload((value) => value + 1); }, []);
   const refreshAfterDelivery = useCallback((deliveredPackageId: string) => {
@@ -156,8 +187,20 @@ export function StaffHandoverScreen({ societyId }: { societyId: string }) {
           <EmptyState icon="cube-outline" title="No packages awaiting handover" body="Dispatched packages for this society will appear here." />
         ) : filteredPackages.length === 0 ? (
           <EmptyState icon="search" title="No matching packages" body="Try a resident name, AWB number, or flat number." />
-        ) : filteredPackages.map((pkg) => (
-          <Pressable key={pkg.id} onPress={() => setSelected(pkg)} style={({ pressed }) => [CARD, styles.packageCard, pressed && styles.pressed]}>
+        ) : filteredPackages.map((pkg) => {
+          const vacationStatus = pkg.residentId ? vacationStatuses[pkg.residentId] ?? "unknown" : "clear";
+          const holdActive = vacationStatus === "active";
+          const holdUnverified = vacationStatus === "unknown";
+          const disabled = holdActive || holdUnverified;
+          return (
+          <Pressable
+            key={pkg.id}
+            disabled={disabled}
+            onPress={() => setSelected(pkg)}
+            accessibilityState={{ disabled }}
+            accessibilityLabel={holdActive ? `${pkg.recipientName || "Resident"} is on vacation hold` : undefined}
+            style={({ pressed }) => [CARD, styles.packageCard, disabled && styles.packageBlocked, pressed && !disabled && styles.pressed]}
+          >
             <View style={styles.packageInfo}>
               <View style={styles.rowBetween}>
                 <Text style={styles.recipient} numberOfLines={1}>{pkg.recipientName || "Recipient"}</Text>
@@ -169,10 +212,13 @@ export function StaffHandoverScreen({ societyId }: { societyId: string }) {
               {pkg.deliverySlotLabel ? <Text style={[styles.slot, pkg.deliverySlotStatus === "default" ? styles.defaultSlot : styles.bookedSlot]}>
                 {pkg.deliverySlotStatus === "default" ? "Default door " : "Door "}{pkg.deliverySlotLabel}
               </Text> : null}
+              {holdActive ? <Text style={styles.vacationHoldBadge}>Vacation hold active</Text> : null}
+              {holdUnverified ? <Text style={styles.vacationHoldChecking}>Checking vacation hold…</Text> : null}
             </View>
-            <Ionicons name="chevron-forward" size={17} color="#D1D5DB" />
+            {!disabled ? <Ionicons name="chevron-forward" size={17} color="#D1D5DB" /> : null}
           </Pressable>
-        ))}
+          );
+        })}
       </ScrollView>
     </View>
   );
@@ -379,6 +425,7 @@ const styles = StyleSheet.create({
   center: { marginTop: 28 },
   packageCard: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 11, paddingVertical: 10, borderRadius: 14, shadowColor: "#000", shadowOpacity: 0.08, shadowRadius: 2, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
   packageInfo: { flex: 1, minWidth: 0 },
+  packageBlocked: { backgroundColor: "#FFFBEB", borderColor: "#FDE68A" },
   rowBetween: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   recipient: { flex: 1, color: colors.primary, fontSize: 13, fontWeight: "700" },
   unit: { color: "#9CA3AF", fontSize: 10, fontFamily: "monospace" },
@@ -388,6 +435,8 @@ const styles = StyleSheet.create({
   slot: { alignSelf: "flex-start", overflow: "hidden", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3, fontSize: 8, fontWeight: "700", marginTop: 4 },
   defaultSlot: { backgroundColor: "#FFFBEB", color: "#92400E" },
   bookedSlot: { backgroundColor: "#ECFDF5", color: "#065F46" },
+  vacationHoldBadge: { alignSelf: "flex-start", overflow: "hidden", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3, fontSize: 8, fontWeight: "700", marginTop: 4, backgroundColor: "#FEE2E2", color: "#B91C1C" },
+  vacationHoldChecking: { color: "#92400E", fontSize: 8, fontWeight: "600", marginTop: 4 },
   pressed: { opacity: 0.78 },
   messageCard: { padding: 13 },
   errorCard: { backgroundColor: "#FEF2F2", borderColor: "#FECACA" },
