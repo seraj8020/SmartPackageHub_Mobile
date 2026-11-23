@@ -34,6 +34,16 @@ function isInFilter(item: HistoryItem, filter: HistoryFilter): boolean {
   return date.getFullYear() === targetYear && date.getMonth() === targetMonth;
 }
 
+function historyTrackingLine(item: HistoryItem): string | null {
+  const tracking = item.trackingNumber?.trim();
+  const awb = item.courierAwb?.trim();
+  const parts: string[] = [];
+  if (tracking) parts.push(`Tracking ${tracking}`);
+  if (awb && awb.toLowerCase() !== tracking?.toLowerCase()) parts.push(`AWB ${awb}`);
+  else if (awb && !tracking) parts.push(`AWB ${awb}`);
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
 export function ResidentHistoryScreen() {
   const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState<HistoryFilter>("all");
@@ -110,22 +120,38 @@ export function ResidentHistoryScreen() {
             <Text style={styles.emptyBody}>Collected packages will appear here.</Text>
           </View>
         ) : (
-          displayedItems.map((item, index) => (
-            <View key={item.id || `${item.pkgNumber ?? "package"}-${index}`} style={styles.card}>
-              <View style={styles.statusIcon}><Ionicons name="checkmark-circle-outline" size={17} color="#10B981" /></View>
-              <View style={styles.cardContent}>
-                <View style={styles.cardTop}>
-                  <Text style={styles.courier}>{item.courier}</Text>
-                  <Text style={styles.category} numberOfLines={1}>{item.category}</Text>
+          displayedItems.map((item, index) => {
+            const trackingLine = historyTrackingLine(item);
+            return (
+              <View key={item.id || `${item.pkgNumber ?? "package"}-${index}`} style={styles.card}>
+                <View style={styles.statusIcon}>
+                  <Ionicons name="checkmark-circle-outline" size={17} color="#10B981" />
                 </View>
-                {item.pkgNumber ? <Text style={styles.packageNumber}>{item.pkgNumber}</Text> : null}
-                <Text style={styles.deliveryInfo}>
-                  {formatDisplayTimestamp(item.collectedAt)}{item.methodOfDelivery || item.method ? ` · ${item.methodOfDelivery || item.method}` : ""}
-                </Text>
+                <View style={styles.cardContent}>
+                  <Text style={styles.courier}>{item.courier}</Text>
+                  {item.category ? (
+                    <Text style={styles.category} numberOfLines={1}>
+                      {item.category}
+                    </Text>
+                  ) : null}
+                  {item.pkgNumber ? (
+                    <Text style={styles.packageNumber}>Package {item.pkgNumber}</Text>
+                  ) : null}
+                  {trackingLine ? (
+                    <Text style={styles.trackingLine} numberOfLines={2}>
+                      {trackingLine}
+                    </Text>
+                  ) : null}
+                  <Text style={styles.deliveryInfo}>
+                    {formatDisplayTimestamp(item.collectedAt)}
+                    {item.methodOfDelivery || item.method
+                      ? ` · ${item.methodOfDelivery || item.method}`
+                      : ""}
+                  </Text>
+                </View>
               </View>
-              <Ionicons name="chevron-forward" size={16} color="#D1D5DB" />
-            </View>
-          ))
+            );
+          })
         )}
       </ScrollView>
     </View>
@@ -144,14 +170,53 @@ const styles = StyleSheet.create({
   filterText: { color: "#6B7280", fontSize: 11, fontWeight: "700" },
   filterTextActive: { color: "#FFFFFF" },
   loader: { marginTop: 28 },
-  card: { flexDirection: "row", alignItems: "center", gap: 11, marginBottom: 8, padding: 14, borderRadius: 13, borderWidth: 1, borderColor: "rgba(0,0,0,0.05)", backgroundColor: colors.surface },
-  statusIcon: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: "#ECFDF5" },
+  card: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 11,
+    marginBottom: 8,
+    padding: 14,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.05)",
+    backgroundColor: colors.surface,
+  },
+  statusIcon: {
+    width: 32,
+    height: 32,
+    marginTop: 1,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#ECFDF5",
+  },
   cardContent: { flex: 1, minWidth: 0 },
-  cardTop: { flexDirection: "row", alignItems: "center", gap: 8 },
-  courier: { color: "#B45309", fontSize: 10, fontWeight: "800", paddingHorizontal: 7, paddingVertical: 3, borderRadius: 7, overflow: "hidden", backgroundColor: "#FEF3C7" },
-  category: { flexShrink: 1, color: "#9CA3AF", fontSize: 11 },
-  packageNumber: { marginTop: 4, color: "#9CA3AF", fontSize: 11, fontVariant: ["tabular-nums"] },
-  deliveryInfo: { marginTop: 3, color: "#6B7280", fontSize: 11 },
+  courier: {
+    alignSelf: "flex-start",
+    color: "#B45309",
+    fontSize: 10,
+    fontWeight: "800",
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 7,
+    overflow: "hidden",
+    backgroundColor: "#FEF3C7",
+  },
+  category: { marginTop: 6, color: "#4B5563", fontSize: 13, fontWeight: "600" },
+  packageNumber: {
+    marginTop: 4,
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
+  },
+  trackingLine: {
+    marginTop: 3,
+    color: "#6B7280",
+    fontSize: 11,
+    fontVariant: ["tabular-nums"],
+  },
+  deliveryInfo: { marginTop: 4, color: "#9CA3AF", fontSize: 11 },
   empty: { alignItems: "center", paddingHorizontal: 20, paddingVertical: 30, borderRadius: 13, borderWidth: 1, borderColor: "#E5E7EB", backgroundColor: colors.surface },
   emptyTitle: { marginTop: 8, color: "#4B5563", fontSize: 14, fontWeight: "600" },
   emptyBody: { marginTop: 4, color: "#9CA3AF", fontSize: 12, textAlign: "center" },

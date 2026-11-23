@@ -21,6 +21,10 @@ import {
 } from "@/features/authentication/services/sessionStorage";
 import { CodApprovalDialog } from "@/features/package-inbox/components/CodApprovalDialog";
 import {
+  shelfCollectLabel,
+  shelfLocationDetail,
+} from "@/features/package-inbox/utils/shelfLocationLabel";
+import {
   getResidentPackages,
   getSocieties,
   type HubPackage,
@@ -263,6 +267,8 @@ export function ResidentHomeScreen() {
         ) : (
           inboxPackages.map((pkg) => {
             const pref = preferenceChip(pkg);
+            const collect = shelfCollectLabel(pkg);
+            const shelfDetail = shelfLocationDetail(pkg);
             return (
               <Pressable
                 key={pkg.id}
@@ -286,6 +292,14 @@ export function ResidentHomeScreen() {
                     {pkg.category}
                     {pkg.weight ? ` · ${pkg.weight}` : ""}
                   </Text>
+                ) : null}
+                {collect ? (
+                  <View style={styles.shelfBlock}>
+                    <Text style={styles.shelfCollect}>{collect}</Text>
+                    {shelfDetail ? (
+                      <Text style={styles.shelfDetail}>{shelfDetail}</Text>
+                    ) : null}
+                  </View>
                 ) : null}
                 {pkg.isCod ? (
                   <Text style={styles.codChip}>
@@ -432,6 +446,26 @@ const styles = StyleSheet.create({
   receivedAt: { fontSize: 10, color: "#9CA3AF", fontVariant: ["tabular-nums"] },
   tracking: { fontSize: 12, color: "#9CA3AF" },
   metaLine: { marginTop: 2, fontSize: 10, color: colors.textMuted },
+  shelfBlock: {
+    marginTop: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: "#F0F7FF",
+    borderWidth: 1,
+    borderColor: "#D6E6F5",
+  },
+  shelfCollect: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: colors.primary,
+  },
+  shelfDetail: {
+    marginTop: 2,
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#4B5563",
+  },
   codChip: {
     marginTop: 8,
     alignSelf: "flex-start",

@@ -27,6 +27,12 @@ export interface HubPackage {
   deliveredAt?: string;
   category: string;
   shelfCode?: string;
+  /** Hub shelf tower/wing (allocation), distinct from resident towerWing. */
+  shelfTowerOrWing?: string;
+  shelfZone?: string;
+  /** Rack / aisle on the hub shelf. */
+  shelfAisle?: string;
+  shelfTier?: number;
   shelfCapacity?: number;
   isColdStorage?: boolean;
   status?: PackageLifecycleStatus;
@@ -46,6 +52,10 @@ export interface HistoryItem {
   category: string;
   method: string;
   pkgNumber?: string;
+  /** SPH tracking number. */
+  trackingNumber?: string;
+  /** Courier AWB / airway bill. */
+  courierAwb?: string;
   methodOfDelivery?: string;
 }
 
@@ -115,6 +125,16 @@ export function toHubPackage(row: Record<string, unknown>): HubPackage {
     deliveredAt: textOf(row, "deliveredAt", "DeliveredAt") || undefined,
     category: textOf(row, "category", "Category", "description") || "Miscellaneous",
     shelfCode: textOf(row, "shelfCode", "ShelfCode") || undefined,
+    shelfTowerOrWing:
+      textOf(row, "shelfTowerOrWing", "ShelfTowerOrWing") || undefined,
+    shelfZone: textOf(row, "shelfZone", "ShelfZone") || undefined,
+    shelfAisle: textOf(row, "shelfAisle", "ShelfAisle") || undefined,
+    shelfTier: (() => {
+      const raw = row.shelfTier ?? row.ShelfTier;
+      if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) return raw;
+      const parsed = Number(raw);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+    })(),
     shelfCapacity: Number(row.shelfCapacity ?? row.ShelfCapacity) || undefined,
     isColdStorage: row.isColdStorage === true || row.IsColdStorage === true,
     status: textOf(row, "status", "Status") || undefined,
@@ -189,7 +209,9 @@ export async function getResidentHistory(residentId: string): Promise<HistoryIte
       collectedAt: textOf(row, "collectedAt", "CollectedAt", "deliveredAt", "DeliveredAt"),
       category: textOf(row, "category", "Category", "status", "Status") || "Miscellaneous",
       method,
-      pkgNumber: textOf(row, "pkgNumber", "PkgNumber", "packageId", "PackageId") || undefined,
+      pkgNumber: textOf(row, "pkgNumber", "PkgNumber") || undefined,
+      trackingNumber: textOf(row, "trackingNumber", "TrackingNumber") || undefined,
+      courierAwb: textOf(row, "courierAwb", "CourierAwb", "awb", "Awb") || undefined,
       methodOfDelivery: method || undefined,
     };
   });
