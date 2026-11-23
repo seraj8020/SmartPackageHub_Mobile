@@ -35,7 +35,7 @@ export function IntakeReceiptCard({
         ) : null}
         <Text style={styles.headerTitle}>Intake saved</Text>
         <Text style={styles.headerSub}>
-          {receipt.shelfCode ? "Shelf assigned." : "Shelf is unassigned."} Resident notice is
+          {receipt.shelfCode ? "Hub slot assigned." : "Hub slot unassigned."} Resident notice is
           queued.
         </Text>
       </View>
@@ -45,7 +45,7 @@ export function IntakeReceiptCard({
           <Text style={styles.pkg}>{receipt.pkgNumber}</Text>
         </View>
         <Text style={styles.shelf}>
-          {receipt.shelfCode ? `Shelf ${receipt.shelfCode}` : "Shelf unassigned"}
+          {receipt.shelfCode ? `Collect from ${receipt.shelfCode}` : "Slot unassigned"}
         </Text>
         <Text style={styles.meta}>
           {receipt.courier || courierFallback} · {receipt.awb}
