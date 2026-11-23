@@ -6,7 +6,10 @@ export const DEFAULT_SHELF_CAPACITY = 1;
 export type ShelfPickerOption = {
   id: string;
   code: string;
+  /** First letter / tower segment for row chips (G from G-2-3). */
   row: string;
+  /** Rack / aisle segment (2 from G-2-3). Empty for legacy A-1 codes. */
+  aisle: string;
   towerOrWing?: string;
   capacity: number;
   packageCount: number;
@@ -34,6 +37,17 @@ export function rowFromShelfCode(code: string): string {
   return /^[A-Z]$/.test(letter) ? letter : "A";
 }
 
+/** Rack/aisle from true slots Zone-Aisle-Tier (G-2-3 → "2"). Legacy A-1 → "". */
+export function aisleFromShelfCode(code: string): string {
+  const parts = code
+    .trim()
+    .split("-")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length >= 3) return parts[1];
+  return "";
+}
+
 export function toShelfPickerOption(shelf: ShelfInventoryItem): ShelfPickerOption {
   const capacity = effectiveCapacity(shelf.capacity);
   const packageCount = Math.max(0, shelf.packageCount);
@@ -42,11 +56,12 @@ export function toShelfPickerOption(shelf: ShelfInventoryItem): ShelfPickerOptio
     id: shelf.id,
     code: shelf.code,
     row: rowFromShelfCode(shelf.code),
+    aisle: aisleFromShelfCode(shelf.code),
     towerOrWing: shelf.towerOrWing,
     capacity,
     packageCount,
     remaining,
-    isFull: shelf.isFull || remaining <= 0,
+    isFull: shelf.isFull || (capacity > 0 && remaining <= 0),
     isColdStorage: shelf.isColdStorage,
   };
 }

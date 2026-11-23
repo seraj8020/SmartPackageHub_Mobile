@@ -192,17 +192,21 @@ function StaffReceivedBody({
     const current = shelfPicker.visible.find(
       (item) => item.code.toLowerCase() === shelf.trim().toLowerCase(),
     );
-    if (current) {
+    if (current && !current.isFull) {
       if (current.row !== row) setRow(current.row);
       return;
     }
     const match =
       shelfPicker.visible.find(
-        (item) => item.code.toLowerCase() === suggested.trim().toLowerCase(),
+        (item) =>
+          item.code.toLowerCase() === suggested.trim().toLowerCase() && !item.isFull,
       ) ??
       shelfPicker.visible.find((item) => !item.isFull) ??
-      shelfPicker.visible[0];
-    if (!match) return;
+      null;
+    if (!match) {
+      setShelf("");
+      return;
+    }
     setShelf(match.code);
     setRow(match.row);
   }, [suggested, shelfPicker.visible]);
@@ -218,15 +222,13 @@ function StaffReceivedBody({
       pool.find(
         (item) =>
           item.code.toLowerCase() === suggested.toLowerCase() && !item.isFull,
-      ) ??
-      pool.find((item) => !item.isFull) ??
-      pool[0];
+      ) ?? pool.find((item) => !item.isFull);
     if (openShelf) {
       setShelf(openShelf.code);
       setRow(openShelf.row);
     } else {
       setShelf("");
-      setRow("");
+      setRow(pool[0]?.row ?? "");
     }
     setSelectedId((current) => {
       if (current === pkg.id) {
@@ -236,9 +238,26 @@ function StaffReceivedBody({
       void suggestShelf(societyId, { towerOrWing: tower, isColdStorage: preferCold })
         .then((result) => {
           if (!result.shelfCode) return;
-          setSuggested(result.shelfCode);
-          setShelf(result.shelfCode);
-          setRow(rowFromShelfCode(result.shelfCode));
+          const code = result.shelfCode;
+          const option = shelfPicker.findOption(code);
+          setSuggested(code);
+          // Never auto-select an occupied slot.
+          if (option?.isFull) {
+            const free =
+              shelfPicker
+                .optionsForPackage(tower, preferCold)
+                .find((item) => !item.isFull) ?? null;
+            if (free) {
+              setShelf(free.code);
+              setRow(free.row);
+            } else {
+              setShelf("");
+              setRow(rowFromShelfCode(code));
+            }
+            return;
+          }
+          setShelf(code);
+          setRow(rowFromShelfCode(code));
         })
         .catch(() => undefined);
       return pkg.id;
@@ -248,6 +267,14 @@ function StaffReceivedBody({
   async function handleAssignShelf(pkg: HubPackage) {
     if (!canAssignShelf(pkg)) {
       setError("COD must be approved by the resident before shelving.");
+      return;
+    }
+    if (!shelf.trim()) {
+      setError("Pick a free hub slot first.");
+      return;
+    }
+    if (selectedShelf?.isFull) {
+      setError("That slot is occupied. Pick a free slot (occupied ones re-open after delivery).");
       return;
     }
     setBusyId(pkg.id);
