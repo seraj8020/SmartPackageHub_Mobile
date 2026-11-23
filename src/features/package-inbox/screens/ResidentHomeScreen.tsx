@@ -15,10 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { resetToRoot } from "@/app/navigation/navigationHelpers";
 import type { ResidentStackParamList } from "@/app/navigation/types";
 import type { ResidentSessionState } from "@/features/authentication/models/auth.types";
-import {
-  clearResidentSession,
-  getResidentSession,
-} from "@/features/authentication/services/sessionStorage";
+import { getResidentSession } from "@/features/authentication/services/sessionStorage";
 import { CodApprovalDialog } from "@/features/package-inbox/components/CodApprovalDialog";
 import {
   shelfCollectLabel,
@@ -29,9 +26,7 @@ import {
   getSocieties,
   type HubPackage,
 } from "@/shared/services/packageApi";
-import { tokenStorage } from "@/shared/services/tokenStorage";
 import { colors } from "@/shared/theme/colors";
-import { SignOutButton } from "@/shared/ui/SignOutButton";
 import { formatDisplayTimestamp } from "@/shared/utils/formatDisplayTimestamp";
 import {
   firstNameFrom,
@@ -161,12 +156,6 @@ export function ResidentHomeScreen() {
     return () => clearInterval(timer);
   }, [pendingCodCount, load]);
 
-  async function signOut() {
-    await clearResidentSession();
-    await tokenStorage.removeToken();
-    resetToRoot(navigation, "Launch");
-  }
-
   return (
     <View style={styles.root}>
       {pendingCod ? (
@@ -195,39 +184,36 @@ export function ResidentHomeScreen() {
           <Text style={styles.location} numberOfLines={1}>
             {societyLocationLabel(societyName, session?.towerWing, session?.flatNumber)}
           </Text>
-          <View style={styles.heroActions}>
-            <Pressable
-              hitSlop={8}
-              onPress={() => {
-                const next = packages.find(
-                  (pkg) => pkg.isCod && pkg.codApprovalStatus === "Pending",
-                );
-                if (next) {
-                  setDismissedCodIds((prev) => {
-                    const copy = new Set(prev);
-                    copy.delete(next.id);
-                    return copy;
-                  });
-                  return;
-                }
-                // No COD pending — refresh so newly shelved packages / badge update immediately.
-                void load(true);
-              }}
-              style={styles.bell}
-              accessibilityRole="button"
-              accessibilityLabel={
-                showBellBadge
-                  ? awaitingCount > 0
-                    ? `Notifications, ${awaitingCount} packages awaiting you`
-                    : "Notifications, COD approval needed"
-                  : "Notifications"
+          <Pressable
+            hitSlop={8}
+            onPress={() => {
+              const next = packages.find(
+                (pkg) => pkg.isCod && pkg.codApprovalStatus === "Pending",
+              );
+              if (next) {
+                setDismissedCodIds((prev) => {
+                  const copy = new Set(prev);
+                  copy.delete(next.id);
+                  return copy;
+                });
+                return;
               }
-            >
-              <Ionicons name="notifications-outline" size={18} color="rgba(255,255,255,0.85)" />
-              {showBellBadge ? <View style={styles.bellDot} /> : null}
-            </Pressable>
-            <SignOutButton onPress={() => void signOut()} />
-          </View>
+              // No COD pending — refresh so newly shelved packages / badge update immediately.
+              void load(true);
+            }}
+            style={styles.bell}
+            accessibilityRole="button"
+            accessibilityLabel={
+              showBellBadge
+                ? awaitingCount > 0
+                  ? `Notifications, ${awaitingCount} packages awaiting you`
+                  : "Notifications, COD approval needed"
+                : "Notifications"
+            }
+          >
+            <Ionicons name="notifications-outline" size={18} color="rgba(255,255,255,0.85)" />
+            {showBellBadge ? <View style={styles.bellDot} /> : null}
+          </Pressable>
         </View>
         <Text style={styles.greeting}>
           {greetingForNow()}, {firstNameFrom(session?.fullName)}!
@@ -344,12 +330,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 12,
     marginBottom: 4,
-  },
-  heroActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    flexShrink: 0,
-    gap: 10,
   },
   location: {
     flex: 1,
