@@ -10,6 +10,7 @@ export interface ShelfInventoryItem {
   id: string;
   code: string;
   towerOrWing?: string;
+  zone?: string;
   capacity: number;
   packageCount: number;
   isFull: boolean;

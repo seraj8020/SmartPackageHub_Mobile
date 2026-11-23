@@ -11,6 +11,7 @@ export type ShelfPickerOption = {
   /** Rack / aisle segment (2 from G-2-3). Empty for legacy A-1 codes. */
   aisle: string;
   towerOrWing?: string;
+  zone?: string;
   capacity: number;
   packageCount: number;
   remaining: number;
@@ -58,12 +59,49 @@ export function toShelfPickerOption(shelf: ShelfInventoryItem): ShelfPickerOptio
     row: rowFromShelfCode(shelf.code),
     aisle: aisleFromShelfCode(shelf.code),
     towerOrWing: shelf.towerOrWing,
+    zone: shelf.zone,
     capacity,
     packageCount,
     remaining,
     isFull: shelf.isFull || (capacity > 0 && remaining <= 0),
     isColdStorage: shelf.isColdStorage,
   };
+}
+
+function stripLocationPrefix(value: string): string {
+  return value.replace(/^(tower|twr|wing|block|blk|zone)\s+/i, "").trim();
+}
+
+/**
+ * Chip label under All/Ambient/Cold.
+ * Prefers "Tower/Wing A and Zone A" (both), or "Zone A" when the row is zone-only.
+ */
+export function shelfRowChipLabel(
+  rowKey: string,
+  shelves: Array<{ code: string; towerOrWing?: string; zone?: string }>,
+): string {
+  const inRow = shelves.filter((shelf) => rowFromShelfCode(shelf.code) === rowKey);
+  const sample = inRow[0];
+  const towerRaw = sample?.towerOrWing?.trim() ?? "";
+  const zoneRaw = sample?.zone?.trim() ?? "";
+  const towerPart = stripLocationPrefix(towerRaw) || rowKey;
+  const zonePart = stripLocationPrefix(zoneRaw) || rowKey;
+
+  // TowerOrWing configured as a zone (e.g. "Zone A") — zone-only chip.
+  if (/^zone\b/i.test(towerRaw)) {
+    const fromTower = stripLocationPrefix(towerRaw) || rowKey;
+    if (zoneRaw && stripLocationPrefix(zoneRaw).toLowerCase() !== fromTower.toLowerCase()) {
+      return `Zone ${fromTower} and Zone ${stripLocationPrefix(zoneRaw)}`;
+    }
+    return `Zone ${fromTower}`;
+  }
+
+  // Always pair tower/wing with zone so staff see both (Zone falls back to row letter).
+  if (towerRaw || zoneRaw) {
+    return `Tower/Wing ${towerPart} and Zone ${zonePart}`;
+  }
+
+  return `Tower/Wing ${rowKey} and Zone ${rowKey}`;
 }
 
 export function applyOptimisticAssign(

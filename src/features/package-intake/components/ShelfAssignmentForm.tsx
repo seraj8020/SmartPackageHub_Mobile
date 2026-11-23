@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { ShelfStorageFilter } from "@/features/shelf-management/hooks/useShelfPicker";
-import type { ShelfPickerOption } from "@/features/shelf-management/utils/shelfCapacity";
+import {
+  shelfRowChipLabel,
+  type ShelfPickerOption,
+} from "@/features/shelf-management/utils/shelfCapacity";
 import { colors } from "@/shared/theme/colors";
 
 type Props = {
@@ -152,6 +155,7 @@ export function ShelfAssignmentForm({
             <View style={styles.tabRow}>
               {rows.map((item) => {
                 const active = row === item;
+                const label = shelfRowChipLabel(item, options);
                 return (
                   <Pressable
                     key={item}
@@ -167,7 +171,7 @@ export function ShelfAssignmentForm({
                     }}
                     style={[styles.tab, active && styles.tabActive]}
                   >
-                    <Text style={[styles.tabText, active && styles.tabTextActive]}>{item}</Text>
+                    <Text style={[styles.tabText, active && styles.tabTextActive]}>{label}</Text>
                   </Pressable>
                 );
               })}
@@ -292,6 +296,7 @@ const styles = StyleSheet.create({
   tab: {
     flexGrow: 1,
     minWidth: 56,
+    paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 10,
     backgroundColor: "#F3F4F6",
@@ -299,7 +304,7 @@ const styles = StyleSheet.create({
   },
   tabActive: { backgroundColor: colors.primary },
   tabCold: { backgroundColor: "#0284C7" },
-  tabText: { fontSize: 11, fontWeight: "800", color: "#6B7280" },
+  tabText: { fontSize: 10, fontWeight: "800", color: "#6B7280", textAlign: "center" },
   tabTextActive: { color: "#fff" },
   aisleTab: {
     paddingHorizontal: 10,
