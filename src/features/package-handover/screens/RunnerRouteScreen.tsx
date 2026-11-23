@@ -17,6 +17,8 @@ import type { StaffTabParamList } from "@/app/navigation/types";
 import { getStaffSession } from "@/features/authentication/services/sessionStorage";
 import type { StaffSessionState } from "@/features/authentication/models/auth.types";
 import { getSocieties, getSocietyPackages, startTowerRoute, type HubPackage } from "@/shared/services/packageApi";
+import { updateCachedStaffPackage } from "@/features/package-inbox/services/staffPackageCache";
+import { upsertCachedDispatchedPackage } from "@/features/package-handover/services/handoverPackageCache";
 import { colors } from "@/shared/theme/colors";
 import { formatTowerLabel, formatUnitLabel } from "@/shared/utils/formatUnitLabel";
 
@@ -133,6 +135,13 @@ export function RunnerRouteScreen({ societyId: societyIdProp, runnerName: runner
     setSuccess(null);
     try {
       const result = await startTowerRoute(societyId, selectedTower, selectedFloor === "all" ? null : selectedFloor);
+      const dispatchedIds = new Set(result.packageIds ?? []);
+      for (const pkg of filtered) {
+        if (dispatchedIds.size > 0 && !dispatchedIds.has(pkg.id)) continue;
+        const dispatched: HubPackage = { ...pkg, status: "Dispatched", deliveredAt: undefined };
+        updateCachedStaffPackage(societyId, dispatched);
+        upsertCachedDispatchedPackage(societyId, dispatched);
+      }
       setSuccess(
         `${result.dispatchedCount} packages dispatched for ${formatTowerLabel(selectedTower)}.`,
       );

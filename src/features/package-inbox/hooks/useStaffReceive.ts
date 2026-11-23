@@ -5,12 +5,14 @@ import {
   type HubPackage,
 } from "@/shared/services/packageApi";
 import {
+  STAFF_PACKAGES_CACHE_TTL_MS,
   getCachedStaffPackages,
   isStaffPackagesCacheFresh,
   setCachedStaffPackages,
   subscribeToStaffPackages,
   updateCachedStaffPackage,
 } from "@/features/package-inbox/services/staffPackageCache";
+import { upsertCachedDispatchedPackage } from "@/features/package-handover/services/handoverPackageCache";
 
 export function useStaffReceive(societyId: string) {
   const [loadingId, setLoadingId] = useState<string | null>(null);
@@ -57,7 +59,7 @@ export function useStaffReceive(societyId: string) {
     }
 
     void load(reloadPackages > 0, true);
-    const timer = setInterval(() => void load(true, false), 2 * 60 * 1000);
+    const timer = setInterval(() => void load(true, false), STAFF_PACKAGES_CACHE_TTL_MS);
     return () => { mounted = false; clearInterval(timer); };
   }, [societyId, reloadPackages]);
 
@@ -92,6 +94,8 @@ export function useStaffReceive(societyId: string) {
       }
       const dispatched: HubPackage = { ...pkg, status: "Dispatched", deliveredAt: undefined };
       updateCachedStaffPackage(societyId, dispatched);
+      // Keep Handover list in sync — otherwise it can miss this package for up to the cache TTL.
+      upsertCachedDispatchedPackage(societyId, dispatched);
       setHubPackages(getCachedStaffPackages(societyId) ?? []);
       return true;
     } catch (err) {

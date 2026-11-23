@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import {
   ActivityIndicator,
@@ -27,8 +27,11 @@ import {
   DISPATCHED_PACKAGES_CACHE_TTL_MS,
   getCachedDispatchedPackages,
   isDispatchedPackagesCacheFresh,
+  removeCachedDispatchedPackage,
   setCachedDispatchedPackages,
+  subscribeToDispatchedPackages,
 } from "@/features/package-handover/services/handoverPackageCache";
+import { updateCachedStaffPackage } from "@/features/package-inbox/services/staffPackageCache";
 
 const CARD = { backgroundColor: "#fff", borderRadius: 16, borderWidth: 1, borderColor: "rgba(0,0,0,0.06)" } as const;
 
@@ -41,6 +44,11 @@ export function StaffHandoverScreen({ societyId }: { societyId: string }) {
   const [query, setQuery] = useState("");
   const [reload, setReload] = useState(0);
   const processedRefreshRef = useRef(0);
+
+  useEffect(
+    () => (societyId ? subscribeToDispatchedPackages(societyId, setPackages) : undefined),
+    [societyId],
+  );
 
   useFocusEffect(useCallback(() => {
     if (!societyId) return undefined;
@@ -90,13 +98,16 @@ export function StaffHandoverScreen({ societyId }: { societyId: string }) {
         const fetchedRows = rows.filter(
           (pkg) => pkg.status?.trim().toLowerCase() !== "delivered" && !pkg.deliveredAt,
         );
-        const cachedIds = new Set((cachedPackages ?? []).map((pkg) => pkg.id));
-        const dispatchedRows = cachedPackages
-          ? [
-              ...fetchedRows.filter((pkg) => cachedIds.has(pkg.id)),
-              ...fetchedRows.filter((pkg) => !cachedIds.has(pkg.id)),
-            ]
-          : fetchedRows;
+        // Keep packages just dispatched from Shelved/Runner that the API response may not include yet.
+        const fetchedIds = new Set(fetchedRows.map((pkg) => pkg.id));
+        const latestCache = getCachedDispatchedPackages(societyId) ?? cachedPackages ?? [];
+        const pendingLocal = latestCache.filter(
+          (pkg) =>
+            !fetchedIds.has(pkg.id) &&
+            pkg.status?.trim().toLowerCase() === "dispatched" &&
+            !pkg.deliveredAt,
+        );
+        const dispatchedRows = [...fetchedRows, ...pendingLocal];
         setCachedDispatchedPackages(societyId, dispatchedRows);
         if (active) setPackages(dispatchedRows);
       })
@@ -109,10 +120,17 @@ export function StaffHandoverScreen({ societyId }: { societyId: string }) {
 
   const refresh = useCallback(() => { setRefreshing(true); setReload((value) => value + 1); }, []);
   const refreshAfterDelivery = useCallback((deliveredPackageId: string) => {
-    const updatedPackages = (getCachedDispatchedPackages(societyId) ?? packages)
-      .filter((pkg) => pkg.id !== deliveredPackageId);
-    setCachedDispatchedPackages(societyId, updatedPackages);
-    setPackages(updatedPackages);
+    const delivered =
+      packages.find((pkg) => pkg.id === deliveredPackageId) ??
+      getCachedDispatchedPackages(societyId)?.find((pkg) => pkg.id === deliveredPackageId);
+    removeCachedDispatchedPackage(societyId, deliveredPackageId);
+    if (delivered) {
+      updateCachedStaffPackage(societyId, {
+        ...delivered,
+        status: "Delivered",
+        deliveredAt: new Date().toISOString(),
+      });
+    }
     setSelected(null);
     setReload((value) => value + 1);
   }, [packages, societyId]);

@@ -1,6 +1,7 @@
 import type { HubPackage } from "@/shared/services/packageApi";
 
-export const STAFF_PACKAGES_CACHE_TTL_MS = 2 * 60 * 1000;
+/** Background refresh / freshness window. Mutations still update caches immediately. */
+export const STAFF_PACKAGES_CACHE_TTL_MS = 5 * 60 * 1000;
 
 interface CacheEntry {
   packages: HubPackage[];
