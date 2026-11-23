@@ -60,6 +60,14 @@ export type DeliveryMethod = "DoorDelivery" | "CounterPickup";
 export interface DeliverPackageRequest {
   token: string;
   method: DeliveryMethod;
+  /** Optional staff evidence note (shown as Traizr-style evidence note). */
+  notes?: string;
+  /** Base64 JPEG handover photo (with or without data-URL prefix). */
+  photoBase64?: string;
+  /** Base64 SVG/PNG resident signature. */
+  signatureBase64?: string;
+  /** Name under the signature pad. */
+  signedByName?: string;
 }
 
 export interface StartTowerRouteResponse {
@@ -312,6 +320,46 @@ export async function dispatchPackage(
     throw new Error(message ?? "Package dispatch failed.");
   }
   return { success: true, packageId, message };
+}
+
+export interface MarkTowerFloorArrivalResponse {
+  message: string;
+  loggedCount: number;
+  packageIds: string[];
+}
+
+/** Logs door-route arrival at tower (+ optional floor) for dispatched packages. */
+export async function markTowerFloorArrival(
+  societyId: string,
+  towerWing: string,
+  floor?: number | null,
+): Promise<MarkTowerFloorArrivalResponse> {
+  const response = await apiFetch(
+    `${API}/societies/${encodeURIComponent(societyId)}/tower-route/arrived`,
+    {
+      method: "POST",
+      headers: await authHeaders(),
+      body: JSON.stringify({ towerWing, floor: floor ?? null }),
+    },
+  );
+  const body = (await response.json().catch(() => ({}))) as {
+    message?: string;
+    Message?: string;
+    loggedCount?: number;
+    LoggedCount?: number;
+    packageIds?: string[];
+    PackageIds?: string[];
+  };
+  const message = body.message ?? body.Message;
+  if (!response.ok) {
+    throw new Error(message ?? `Unable to mark tower/floor arrival (${response.status})`);
+  }
+  const packageIds = (body.packageIds ?? body.PackageIds ?? []).map(String);
+  return {
+    message: message ?? "Arrival logged.",
+    loggedCount: body.loggedCount ?? body.LoggedCount ?? packageIds.length,
+    packageIds,
+  };
 }
 
 export async function startTowerRoute(

@@ -1,17 +1,5 @@
-import { useState } from "react";
-import {
-  FlatList,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { StyleSheet, Text, TextInput, View } from "react-native";
 import { colors } from "@/shared/theme/colors";
-import { sortCarriersForDropdown } from "@/features/package-intake/services/intakeApi";
-
-const OTHER_ONLY = ["Other"] as const;
 
 type Props = {
   courier: string;
@@ -19,7 +7,6 @@ type Props = {
   name: string;
   tower: string;
   flat: string;
-  carriers?: readonly string[];
   onCourierChange: (value: string) => void;
   onAwbChange: (value: string) => void;
   onNameChange: (value: string) => void;
@@ -33,36 +20,24 @@ export function IntakeLabelFields({
   name,
   tower,
   flat,
-  carriers,
   onCourierChange,
   onAwbChange,
   onNameChange,
   onTowerChange,
   onFlatChange,
 }: Props) {
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const options = sortCarriersForDropdown(
-    carriers && carriers.length > 0 ? carriers : OTHER_ONLY,
-  );
-  const courierValue = options.includes(courier) ? courier : "";
-
   return (
     <View style={styles.block}>
-      <Text style={styles.label}>Courier</Text>
-      <Pressable
-        style={[styles.input, styles.dropdown]}
-        onPress={() => setPickerOpen(true)}
-      >
-        <Text
-          style={[
-            styles.dropdownValue,
-            !courierValue && styles.dropdownPlaceholder,
-          ]}
-        >
-          {courierValue || "Select courier"}
-        </Text>
-        <Text style={styles.dropdownChevron}>▾</Text>
-      </Pressable>
+      <Text style={styles.label}>Courier (required)</Text>
+      <TextInput
+        value={courier}
+        onChangeText={onCourierChange}
+        autoCapitalize="words"
+        autoCorrect={false}
+        placeholder="Type if OCR did not fill"
+        placeholderTextColor="#9CA3AF"
+        style={styles.input}
+      />
 
       <Text style={styles.label}>AWB / tracking</Text>
       <TextInput
@@ -108,46 +83,6 @@ export function IntakeLabelFields({
           />
         </View>
       </View>
-
-      <Modal
-        visible={pickerOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setPickerOpen(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={() => setPickerOpen(false)}
-          />
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Select courier</Text>
-            <FlatList
-              data={[...options]}
-              keyExtractor={(item) => item}
-              keyboardShouldPersistTaps="handled"
-              renderItem={({ item }) => {
-                const active = item === courierValue;
-                return (
-                  <Pressable
-                    style={[styles.optionRow, active && styles.optionRowActive]}
-                    onPress={() => {
-                      onCourierChange(item);
-                      setPickerOpen(false);
-                    }}
-                  >
-                    <Text
-                      style={[styles.optionText, active && styles.optionTextActive]}
-                    >
-                      {item}
-                    </Text>
-                  </Pressable>
-                );
-              }}
-            />
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -173,42 +108,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.text,
   },
-  dropdown: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  dropdownValue: { fontSize: 14, color: colors.text, fontWeight: "600" },
-  dropdownPlaceholder: { color: "#9CA3AF", fontWeight: "500" },
-  dropdownChevron: { fontSize: 12, color: colors.textMuted },
   row: { flexDirection: "row", gap: 10 },
   half: { flex: 1 },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    justifyContent: "center",
-    padding: 24,
-  },
-  modalCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    maxHeight: "70%",
-    paddingVertical: 12,
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: colors.primary,
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-  },
-  optionRow: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
-  optionRowActive: { backgroundColor: colors.primaryMuted },
-  optionText: { color: colors.text, fontSize: 15 },
-  optionTextActive: { color: colors.primary, fontWeight: "700" },
 });

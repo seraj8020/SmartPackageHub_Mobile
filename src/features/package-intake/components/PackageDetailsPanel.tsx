@@ -27,7 +27,7 @@ export function PackageDetailsPanel(props: Props) {
     <View style={styles.wrap}>
       <Pressable onPress={() => props.onOpenChange(!props.open)} style={styles.toggle}>
         <Text style={styles.toggleText}>
-          {props.open ? "Hide package details" : "Package details (optional)"}
+          {props.open ? "Hide package details" : "Package details (defaults if blank)"}
         </Text>
       </Pressable>
       {props.open ? (

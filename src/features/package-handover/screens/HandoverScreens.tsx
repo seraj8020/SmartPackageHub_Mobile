@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -32,6 +33,10 @@ import {
   subscribeToDispatchedPackages,
 } from "@/features/package-handover/services/handoverPackageCache";
 import { updateCachedStaffPackage } from "@/features/package-inbox/services/staffPackageCache";
+import {
+  SignaturePad,
+  strokesToSvgBase64,
+} from "@/features/package-handover/components/SignaturePad";
 
 const CARD = { backgroundColor: "#fff", borderRadius: 16, borderWidth: 1, borderColor: "rgba(0,0,0,0.06)" } as const;
 
@@ -207,26 +212,59 @@ function HandoverForm({ pkg, onBack, onDelivered }: { pkg: HubPackage; onBack: (
   const [method, setMethod] = useState<DeliveryMethod>(pkg.preferredDeliveryMethod === "CounterPickup" ? "CounterPickup" : "DoorDelivery");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraMode, setCameraMode] = useState<"off" | "qr" | "photo">("off");
   const [permission, requestPermission] = useCameraPermissions();
+  const [signedByName, setSignedByName] = useState(pkg.recipientName?.trim() || "");
+  const [evidenceNote, setEvidenceNote] = useState("");
+  const [photoBase64, setPhotoBase64] = useState<string | null>(null);
+  const [signatureEmpty, setSignatureEmpty] = useState(true);
+  const signaturePayloadRef = useRef<{ strokes: { x: number; y: number }[][]; width: number; height: number } | null>(null);
+  const photoCameraRef = useRef<CameraView | null>(null);
   const otpActionRef = useRef<"generate" | "deliver" | null>(null);
 
-  async function openCamera() {
+  async function ensureCamera(reason: "qr" | "photo") {
     if (!permission?.granted) {
       const result = await requestPermission();
-      if (!result.granted) { setError("Camera permission is needed to scan the pickup code."); return; }
+      if (!result.granted) {
+        setError(
+          reason === "photo"
+            ? "Camera permission is needed to capture proof-of-delivery photo."
+            : "Camera permission is needed to scan the pickup code.",
+        );
+        return false;
+      }
     }
     setError(null);
-    setCameraOpen(true);
+    setCameraMode(reason);
+    return true;
   }
 
   function onCodeDetected(result: BarcodeScanningResult) {
-    if (otpActionRef.current) return;
+    if (otpActionRef.current || cameraMode !== "qr") return;
     // Resident QR from API: SPH|{pkgNumber}|{otp} — take the OTP segment, not pkg digits.
     const digits = extractPickupOtp(result.data);
     if (!digits) return;
     setOtp(digits);
-    setCameraOpen(false);
+    setCameraMode("off");
+  }
+
+  async function captureEvidencePhoto() {
+    try {
+      const shot = await photoCameraRef.current?.takePictureAsync({
+        quality: 0.55,
+        base64: true,
+        skipProcessing: true,
+      });
+      if (!shot?.base64) {
+        setError("Unable to capture photo. Try again.");
+        return;
+      }
+      setPhotoBase64(shot.base64);
+      setCameraMode("off");
+      setError(null);
+    } catch {
+      setError("Unable to capture photo. Try again.");
+    }
   }
 
   async function generateOtp() {
@@ -237,7 +275,7 @@ function HandoverForm({ pkg, onBack, onDelivered }: { pkg: HubPackage; onBack: (
     setOtpNotice("");
     setGeneratedOtp("");
     setOtp("");
-    setCameraOpen(false);
+    setCameraMode("off");
     try {
       const result = await generatePackagePickupOtp(pkg.id);
       setGeneratedOtp(result.pickupOtp);
@@ -257,11 +295,28 @@ function HandoverForm({ pkg, onBack, onDelivered }: { pkg: HubPackage; onBack: (
     if (otpActionRef.current) return;
     const token = otp.replace(/\D/g, "");
     if (!/^\d{6}$/.test(token)) { setError("Enter the complete 6-digit resident OTP."); return; }
+
+    // Photo / signature are optional — OTP is enough when the resident is in a hurry.
+    const signatureBase64 = signaturePayloadRef.current && !signatureEmpty
+      ? strokesToSvgBase64(
+          signaturePayloadRef.current.strokes,
+          signaturePayloadRef.current.width,
+          signaturePayloadRef.current.height,
+        )
+      : null;
+
     otpActionRef.current = "deliver";
     setBusy(true);
     setError(null);
     try {
-      await markPackageDelivered(pkg.id, { token, method });
+      await markPackageDelivered(pkg.id, {
+        token,
+        method,
+        notes: evidenceNote.trim() || undefined,
+        photoBase64: photoBase64 ?? undefined,
+        signatureBase64: signatureBase64 ?? undefined,
+        signedByName: signedByName.trim() || undefined,
+      });
       onDelivered(pkg.id);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unable to verify OTP and deliver package.";
@@ -285,10 +340,18 @@ function HandoverForm({ pkg, onBack, onDelivered }: { pkg: HubPackage; onBack: (
         </View>
 
         <View style={styles.scannerCard}>
-          {cameraOpen ? (
+          {cameraMode === "qr" ? (
             <>
               <CameraView style={StyleSheet.absoluteFill} facing="back" barcodeScannerSettings={{ barcodeTypes: ["qr"] }} onBarcodeScanned={onCodeDetected} />
-              <Pressable style={styles.closeCamera} onPress={() => setCameraOpen(false)}><Ionicons name="close" size={20} color="#fff" /></Pressable>
+              <Pressable style={styles.closeCamera} onPress={() => setCameraMode("off")}><Ionicons name="close" size={20} color="#fff" /></Pressable>
+            </>
+          ) : cameraMode === "photo" ? (
+            <>
+              <CameraView ref={photoCameraRef} style={StyleSheet.absoluteFill} facing="back" />
+              <Pressable style={styles.closeCamera} onPress={() => setCameraMode("off")}><Ionicons name="close" size={20} color="#fff" /></Pressable>
+              <Pressable style={styles.capturePhotoBtn} onPress={() => void captureEvidencePhoto()} accessibilityRole="button" accessibilityLabel="Capture proof photo">
+                <View style={styles.capturePhotoInner} />
+              </Pressable>
             </>
           ) : (
             <View style={styles.scanIdle}>
@@ -352,9 +415,82 @@ function HandoverForm({ pkg, onBack, onDelivered }: { pkg: HubPackage; onBack: (
           </View>
         </View>
 
+        <View style={[CARD, styles.podCard]}>
+          <Text style={styles.fieldLabel}>PROOF OF DELIVERY (OPTIONAL)</Text>
+          <Text style={styles.podHint}>
+            Photo and signature are optional. OTP alone completes delivery if the resident is in a hurry.
+          </Text>
+
+          <Text style={styles.enterLabel}>SIGNED BY</Text>
+          <TextInput
+            style={styles.noteInput}
+            value={signedByName}
+            editable={!busy}
+            placeholder="Resident name"
+            placeholderTextColor="#9CA3AF"
+            onChangeText={setSignedByName}
+          />
+
+          <SignaturePad
+            onChange={(payload) => {
+              signaturePayloadRef.current = {
+                strokes: payload.strokes,
+                width: payload.width,
+                height: payload.height,
+              };
+              setSignatureEmpty(payload.empty);
+            }}
+          />
+
+          <Text style={styles.enterLabel}>PHOTO EVIDENCE</Text>
+          {photoBase64 ? (
+            <View style={styles.photoPreviewWrap}>
+              <Image
+                source={{ uri: `data:image/jpeg;base64,${photoBase64}` }}
+                style={styles.photoPreview}
+                accessibilityLabel="Proof of delivery photo"
+              />
+              <View style={styles.photoActions}>
+                <Pressable
+                  style={styles.secondaryBtn}
+                  onPress={() => void ensureCamera("photo")}
+                  disabled={busy}
+                >
+                  <Text style={styles.secondaryBtnText}>Retake photo</Text>
+                </Pressable>
+                <Pressable style={styles.secondaryBtn} onPress={() => setPhotoBase64(null)} disabled={busy}>
+                  <Text style={styles.secondaryBtnText}>Remove</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            <Pressable
+              style={styles.secondaryBtn}
+              onPress={() => void ensureCamera("photo")}
+              disabled={busy || generatingOtp}
+              accessibilityRole="button"
+              accessibilityLabel="Capture proof of delivery photo"
+            >
+              <Ionicons name="camera-outline" size={16} color={colors.primary} />
+              <Text style={styles.secondaryBtnText}>Capture photo</Text>
+            </Pressable>
+          )}
+
+          <Text style={styles.enterLabel}>EVIDENCE NOTE (OPTIONAL)</Text>
+          <TextInput
+            style={[styles.noteInput, styles.noteMultiline]}
+            value={evidenceNote}
+            editable={!busy}
+            placeholder="e.g. Left with reception"
+            placeholderTextColor="#9CA3AF"
+            multiline
+            onChangeText={setEvidenceNote}
+          />
+        </View>
+
         {error ? <View style={styles.errorBox}><Text style={styles.handoverError}>{error}</Text></View> : null}
         <Pressable style={({ pressed }) => [styles.verifyButton, (busy || generatingOtp || pressed) && styles.verifyPressed]} onPress={() => void submit()} disabled={busy || generatingOtp}>
-          {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.verifyText}>Verify and mark delivered</Text>}
+          {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.verifyText}>Save & deliver</Text>}
         </Pressable>
       </ScrollView>
     </View>
@@ -529,6 +665,54 @@ const styles = StyleSheet.create({
   verifyButton: { minHeight: 46, borderRadius: 12, backgroundColor: "#22C55E", alignItems: "center", justifyContent: "center", paddingHorizontal: 14, marginTop: 2 },
   verifyPressed: { opacity: 0.72 },
   verifyText: { color: "#fff", fontSize: 13, fontWeight: "800" },
+  podCard: { paddingHorizontal: 12, paddingVertical: 12, borderRadius: 12, gap: 4, shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 2, elevation: 1 },
+  podHint: { color: "#6B7280", fontSize: 11, lineHeight: 15, marginBottom: 10 },
+  noteInput: {
+    minHeight: 42,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    backgroundColor: "#F8F7F4",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: colors.text,
+    fontSize: 13,
+    marginBottom: 10,
+  },
+  noteMultiline: { minHeight: 64, textAlignVertical: "top" },
+  secondaryBtn: {
+    minHeight: 40,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    backgroundColor: "#EEF4F8",
+    borderWidth: 1,
+    borderColor: "#D7E6F0",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginBottom: 8,
+  },
+  secondaryBtnText: { color: colors.primary, fontSize: 12, fontWeight: "700" },
+  photoPreviewWrap: { marginBottom: 8 },
+  photoPreview: { width: "100%", height: 160, borderRadius: 10, backgroundColor: "#E5E7EB" },
+  photoActions: { flexDirection: "row", gap: 8, marginTop: 8 },
+  capturePhotoBtn: {
+    position: "absolute",
+    bottom: 14,
+    alignSelf: "center",
+    left: "50%",
+    marginLeft: -32,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 3,
+    borderColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.25)",
+  },
+  capturePhotoInner: { width: 48, height: 48, borderRadius: 24, backgroundColor: "#fff" },
   deliveredCard: { borderColor: "#6EE7B7", padding: 12, borderRadius: 13, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
   deliveredHeader: { flexDirection: "row", gap: 8, marginBottom: 8 },
   deliveredBadge: { minHeight: 34, backgroundColor: "#ECFDF5", borderRadius: 9, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingHorizontal: 8 },

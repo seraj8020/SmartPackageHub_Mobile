@@ -40,7 +40,7 @@ export async function recognizeLabelFromUri(imageUri: string): Promise<OcrResult
     const parsed = parseLabel(text);
     // Always print in Metro/PowerShell so staff OCR debugging stays visible.
     console.log(
-      `[labelOcr] ${text.length} chars → name=${parsed.recipientName} tower=${parsed.tower} flat=${parsed.flatNumber} awb=${parsed.awb} courier=${parsed.courier}`,
+      `[labelOcr] ${text.length} chars → name=${parsed.recipientName} tower=${parsed.tower} flat=${parsed.flatNumber} awb=${parsed.awb} courier=${parsed.courier} weight=${parsed.weightKg} dims=${parsed.lengthCm}x${parsed.widthCm}x${parsed.heightCm}`,
     );
     console.log(`[labelOcr] raw:\n${text}`);
     return {
