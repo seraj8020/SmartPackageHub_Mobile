@@ -1,7 +1,9 @@
 import { useCallback, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import type { ResidentStackParamList } from "@/app/navigation/types";
 import { getResidentSession } from "@/features/authentication/services/sessionStorage";
 import { useVacationHold } from "@/features/vacation-hold/hooks/useVacationHold";
 import { formatHoldRange } from "@/features/vacation-hold/utils/vacationHoldDates";
@@ -9,6 +11,7 @@ import { colors } from "@/shared/theme/colors";
 
 export function VacationHoldScreen() {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<NativeStackNavigationProp<ResidentStackParamList>>();
   const [session, setSession] = useState<{ residentId: string; societyId: string; towerWing?: string; flatNumber?: string } | null>(null);
 
   const loadSession = useCallback(() => {
@@ -21,16 +24,27 @@ export function VacationHoldScreen() {
     return <View style={[styles.root, styles.centered, { paddingTop: insets.top }]}><ActivityIndicator color={colors.primary} /></View>;
   }
 
-  return <VacationHoldBody {...session} topInset={insets.top} bottomInset={insets.bottom} />;
+  return (
+    <VacationHoldBody
+      {...session}
+      topInset={insets.top}
+      bottomInset={insets.bottom}
+      onBack={() => {
+        if (navigation.canGoBack()) navigation.goBack();
+        else navigation.navigate("Home");
+      }}
+    />
+  );
 }
 
-function VacationHoldBody({ residentId, societyId, towerWing, flatNumber, topInset, bottomInset }: {
+function VacationHoldBody({ residentId, societyId, towerWing, flatNumber, topInset, bottomInset, onBack }: {
   residentId: string;
   societyId: string;
   towerWing?: string;
   flatNumber?: string;
   topInset: number;
   bottomInset: number;
+  onBack: () => void;
 }) {
   const { hold, startDate, endDate, setStartDate, setEndDate, loading, busy, error, message, unitLabel, save, cancel } =
     useVacationHold(residentId, societyId, towerWing, flatNumber);
@@ -39,6 +53,9 @@ function VacationHoldBody({ residentId, societyId, towerWing, flatNumber, topIns
   return (
     <View style={[styles.root, { paddingTop: topInset }]}>
       <View style={styles.hero}>
+        <Pressable onPress={onBack} hitSlop={8} style={styles.backBtn}>
+          <Text style={styles.backBtnText}>← Back</Text>
+        </Pressable>
         <Text style={styles.title}>Vacation hold</Text>
         <Text style={styles.subtitle}>{unitLabel}</Text>
       </View>
@@ -77,6 +94,8 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   centered: { alignItems: "center", justifyContent: "center" },
   hero: { backgroundColor: colors.primary, paddingHorizontal: 20, paddingVertical: 20 },
+  backBtn: { marginBottom: 10, alignSelf: "flex-start" },
+  backBtnText: { color: "rgba(255,255,255,0.7)", fontSize: 12, fontWeight: "600" },
   title: { color: "#fff", fontSize: 18, fontWeight: "700" },
   subtitle: { marginTop: 4, color: "rgba(255,255,255,0.58)", fontSize: 12 },
   content: { paddingHorizontal: 16, paddingTop: 16, gap: 12 },
