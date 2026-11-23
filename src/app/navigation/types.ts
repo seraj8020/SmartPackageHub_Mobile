@@ -10,10 +10,15 @@ export type RootStackParamList = {
 };
 
 export type ResidentStackParamList = {
-  ResidentTabs: undefined;
+  Home: undefined;
+  Packages: undefined;
+  History: undefined;
+  Vacation: undefined;
+  Profile: undefined;
   DeliveryPreference: { pkg: HubPackage };
 };
 
+/** @deprecated Use ResidentStackParamList — kept temporarily for any lingering imports. */
 export type ResidentTabParamList = {
   Inbox: undefined;
   History: undefined;
@@ -21,7 +26,8 @@ export type ResidentTabParamList = {
   Profile: undefined;
 };
 
-export type StaffTabParamList = {
+export type StaffStackParamList = {
+  Home: undefined;
   Scan: undefined;
   Inbox: undefined;
   Shelf: undefined;
@@ -30,3 +36,6 @@ export type StaffTabParamList = {
   Hand: undefined;
   Done: undefined;
 };
+
+/** @deprecated Use StaffStackParamList */
+export type StaffTabParamList = StaffStackParamList;

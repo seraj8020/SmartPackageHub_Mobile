@@ -11,12 +11,19 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback } from "react";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { resetToRoot } from "@/app/navigation/navigationHelpers";
-import type { StaffTabParamList } from "@/app/navigation/types";
+import type { StaffStackParamList } from "@/app/navigation/types";
 import { getStaffSession } from "@/features/authentication/services/sessionStorage";
 import type { StaffSessionState } from "@/features/authentication/models/auth.types";
-import { getSocieties, getSocietyPackages, startTowerRoute, type HubPackage } from "@/shared/services/packageApi";
+import {
+  getSocieties,
+  getSocietyDispatchedPackages,
+  getSocietyPackages,
+  markTowerFloorArrival,
+  startTowerRoute,
+  type HubPackage,
+} from "@/shared/services/packageApi";
 import { updateCachedStaffPackage } from "@/features/package-inbox/services/staffPackageCache";
 import { upsertCachedDispatchedPackage } from "@/features/package-handover/services/handoverPackageCache";
 import { colors } from "@/shared/theme/colors";
@@ -45,7 +52,7 @@ function compareFlat(a: HubPackage, b: HubPackage): number {
 }
 
 export function RunnerRouteScreen({ societyId: societyIdProp, runnerName: runnerNameProp }: RunnerRouteScreenProps) {
-  const navigation = useNavigation<BottomTabNavigationProp<StaffTabParamList>>();
+  const navigation = useNavigation<NativeStackNavigationProp<StaffStackParamList>>();
   const [session, setSession] = useState<StaffSessionState | null>(null);
   const [societyName, setSocietyName] = useState("Society");
   useFocusEffect(useCallback(() => {
@@ -77,22 +84,32 @@ export function RunnerRouteScreen({ societyId: societyIdProp, runnerName: runner
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const [markingArrival, setMarkingArrival] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [dispatched, setDispatched] = useState<HubPackage[]>([]);
 
   useFocusEffect(useCallback(() => {
     let active = true;
     if (!societyId) {
       setPackages([]);
+      setDispatched([]);
       setLoadError("Society session is missing. Sign in again.");
       setLoading(false);
       return () => { active = false; };
     }
     setLoading(true);
     setLoadError(null);
-    getSocietyPackages(societyId)
-      .then((rows) => { if (active) setPackages(rows); })
+    void Promise.all([
+      getSocietyPackages(societyId),
+      getSocietyDispatchedPackages(societyId).catch(() => [] as HubPackage[]),
+    ])
+      .then(([shelvedRows, dispatchedRows]) => {
+        if (!active) return;
+        setPackages(shelvedRows);
+        setDispatched(dispatchedRows);
+      })
       .catch((error: unknown) => {
         if (active) setLoadError(error instanceof Error ? error.message : "Unable to load shelved packages.");
       })
@@ -128,6 +145,15 @@ export function RunnerRouteScreen({ societyId: societyIdProp, runnerName: runner
   );
   const filtered = selectedFloor === "all" ? towerPackages : towerPackages.filter((pkg) => packageFloor(pkg) === selectedFloor);
 
+  const arrivalCandidates = useMemo(() => {
+    const towerMatch = dispatched.filter(
+      (pkg) => (pkg.tower || pkg.towerWing || "").trim() === selectedTower,
+    );
+    return selectedFloor === "all"
+      ? towerMatch
+      : towerMatch.filter((pkg) => packageFloor(pkg) === selectedFloor);
+  }, [dispatched, selectedTower, selectedFloor]);
+
   async function handleStartRoute() {
     if (!selectedTower || filtered.length === 0 || starting) return;
     setStarting(true);
@@ -138,9 +164,9 @@ export function RunnerRouteScreen({ societyId: societyIdProp, runnerName: runner
       const dispatchedIds = new Set(result.packageIds ?? []);
       for (const pkg of filtered) {
         if (dispatchedIds.size > 0 && !dispatchedIds.has(pkg.id)) continue;
-        const dispatched: HubPackage = { ...pkg, status: "Dispatched", deliveredAt: undefined };
-        updateCachedStaffPackage(societyId, dispatched);
-        upsertCachedDispatchedPackage(societyId, dispatched);
+        const next: HubPackage = { ...pkg, status: "Dispatched", deliveredAt: undefined };
+        updateCachedStaffPackage(societyId, next);
+        upsertCachedDispatchedPackage(societyId, next);
       }
       setSuccess(
         `${result.dispatchedCount} packages dispatched for ${formatTowerLabel(selectedTower)}.`,
@@ -152,6 +178,29 @@ export function RunnerRouteScreen({ societyId: societyIdProp, runnerName: runner
       setStartError(error instanceof Error ? error.message : "Unable to start route.");
     } finally {
       setStarting(false);
+    }
+  }
+
+  async function handleMarkArrival() {
+    if (!selectedTower || markingArrival) return;
+    setMarkingArrival(true);
+    setStartError(null);
+    setSuccess(null);
+    try {
+      const result = await markTowerFloorArrival(
+        societyId,
+        selectedTower,
+        selectedFloor === "all" ? null : selectedFloor,
+      );
+      setSuccess(
+        result.message ||
+          `Arrival logged at ${formatTowerLabel(selectedTower)}${selectedFloor === "all" ? "" : ` · Floor ${selectedFloor}`}.`,
+      );
+      setReloadKey((key) => key + 1);
+    } catch (error) {
+      setStartError(error instanceof Error ? error.message : "Unable to mark arrival.");
+    } finally {
+      setMarkingArrival(false);
     }
   }
 
@@ -221,11 +270,27 @@ export function RunnerRouteScreen({ societyId: societyIdProp, runnerName: runner
 
           {startError ? <Text style={styles.errorBox}>{startError}</Text> : null}
           {success ? <Text style={styles.successBox}>{success}</Text> : null}
-          <Pressable style={[styles.startButton, (starting || filtered.length === 0) && styles.disabled]} disabled={starting || filtered.length === 0} onPress={() => void handleStartRoute()}>
+          <Pressable style={[styles.startButton, (starting || markingArrival || filtered.length === 0) && styles.disabled]} disabled={starting || markingArrival || filtered.length === 0} onPress={() => void handleStartRoute()}>
             {starting ? <ActivityIndicator color="#fff" /> : <Ionicons name="navigate-outline" size={18} color="#fff" />}
             <Text style={styles.startText}>{starting ? "Starting route…" : "Start route"}</Text>
           </Pressable>
-          <Text style={styles.note}>Starting the route dispatches this batch (Shelved → Dispatched).</Text>
+          <Pressable
+            style={[styles.arriveButton, (markingArrival || starting || arrivalCandidates.length === 0) && styles.disabled]}
+            disabled={markingArrival || starting || arrivalCandidates.length === 0}
+            onPress={() => void handleMarkArrival()}
+            accessibilityRole="button"
+            accessibilityLabel="Mark arrived at selected tower and floor"
+          >
+            {markingArrival ? <ActivityIndicator color={colors.primary} /> : <Ionicons name="location-outline" size={18} color={colors.primary} />}
+            <Text style={styles.arriveText}>
+              {markingArrival
+                ? "Logging arrival…"
+                : `Mark arrived · ${formatTowerLabel(selectedTower)}${selectedFloor === "all" ? "" : ` · Fl ${selectedFloor}`} (${arrivalCandidates.length})`}
+            </Text>
+          </Pressable>
+          <Text style={styles.note}>
+            Start route dispatches the batch. When you reach the tower/floor, tap Mark arrived so recent activity shows the hop (door delivery only — no hub counter).
+          </Text>
         </>}
       </ScrollView>
     </View>
@@ -268,6 +333,19 @@ const styles = StyleSheet.create({
   noPackages: { color: "#6B7280", fontSize: 12, padding: 14 },
   startButton: { flexDirection: "row", gap: 8, alignItems: "center", justifyContent: "center", backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 13, marginTop: 2 },
   startText: { color: "#fff", fontSize: 13, fontWeight: "800" },
+  arriveButton: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EEF4F8",
+    borderWidth: 1,
+    borderColor: "#D7E6F0",
+    borderRadius: 12,
+    paddingVertical: 13,
+    marginTop: 10,
+  },
+  arriveText: { color: colors.primary, fontSize: 12, fontWeight: "800" },
   disabled: { opacity: 0.55 },
   note: { color: "#9CA3AF", fontSize: 10, lineHeight: 15, marginTop: 9, textAlign: "center" },
   empty: { alignItems: "center", backgroundColor: "#fff", borderRadius: 14, padding: 24, gap: 8 },

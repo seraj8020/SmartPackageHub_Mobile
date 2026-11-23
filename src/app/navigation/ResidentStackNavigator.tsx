@@ -1,29 +1,58 @@
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import type { ResidentStackParamList } from "@/app/navigation/types";
-import { ResidentTabNavigator } from "@/app/navigation/ResidentTabNavigator";
+import { ResidentHubHomeScreen } from "@/features/package-inbox/screens/ResidentHubHomeScreen";
+import { ResidentHomeScreen } from "@/features/package-inbox/screens/ResidentHomeScreen";
+import { ResidentHistoryScreen } from "@/features/package-inbox/screens/ResidentHistoryScreen";
+import { ResidentProfileScreen } from "@/features/package-inbox/screens/ResidentProfileScreen";
+import { ResidentPlaceholderScreen } from "@/features/package-inbox/screens/ResidentPlaceholderScreen";
 import { DoorDeliverySlotScreen } from "@/features/delivery-slots/screens/DoorDeliverySlotScreen";
 import { colors } from "@/shared/theme/colors";
+import { hubColors } from "@/shared/ui/hub/hubTheme";
 
 const Stack = createNativeStackNavigator<ResidentStackParamList>();
+
+const detailScreenOptions = {
+  headerStyle: { backgroundColor: colors.surface },
+  headerTintColor: colors.primary,
+  headerTitleStyle: { fontWeight: "700" as const },
+  headerShadowVisible: false,
+  contentStyle: { backgroundColor: colors.background },
+};
+
+function VacationScreen() {
+  return (
+    <ResidentPlaceholderScreen
+      title="Vacation hold"
+      body="Pause door delivery while you are away."
+    />
+  );
+}
 
 export function ResidentStackNavigator() {
   return (
     <Stack.Navigator
+      initialRouteName="Home"
       screenOptions={{
-        headerStyle: { backgroundColor: colors.surface },
-        headerTintColor: colors.primary,
-        contentStyle: { backgroundColor: colors.background },
+        headerStyle: { backgroundColor: hubColors.surface },
+        headerTintColor: hubColors.text,
+        headerTitleStyle: { fontWeight: "700" },
+        headerShadowVisible: false,
+        contentStyle: { backgroundColor: hubColors.background },
       }}
     >
+      <Stack.Screen name="Home" component={ResidentHubHomeScreen} options={{ headerShown: false }} />
       <Stack.Screen
-        name="ResidentTabs"
-        component={ResidentTabNavigator}
-        options={{ headerShown: false }}
+        name="Packages"
+        component={ResidentHomeScreen}
+        options={{ ...detailScreenOptions, title: "My packages" }}
       />
+      <Stack.Screen name="History" component={ResidentHistoryScreen} options={{ ...detailScreenOptions, title: "History" }} />
+      <Stack.Screen name="Vacation" component={VacationScreen} options={{ ...detailScreenOptions, title: "Vacation" }} />
+      <Stack.Screen name="Profile" component={ResidentProfileScreen} options={{ ...detailScreenOptions, title: "Profile" }} />
       <Stack.Screen
         name="DeliveryPreference"
         component={DoorDeliverySlotScreen}
-        options={{ headerShown: false }}
+        options={{ ...detailScreenOptions, headerShown: false }}
       />
     </Stack.Navigator>
   );

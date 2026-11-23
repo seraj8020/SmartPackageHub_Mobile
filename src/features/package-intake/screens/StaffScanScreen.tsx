@@ -22,7 +22,6 @@ import { ResidentMatchList } from "@/features/package-intake/components/Resident
 import { ResidentSearchField } from "@/features/package-intake/components/ResidentSearchField";
 import { usePackageIntake } from "@/features/package-intake/hooks/usePackageIntake";
 import { startIntakeQueueSync } from "@/features/package-intake/services/intakeQueueSync";
-import { getIntakeCarriers } from "@/features/package-intake/services/intakeApi";
 import { colors } from "@/shared/theme/colors";
 
 export function StaffScanScreen() {
@@ -80,22 +79,11 @@ function StaffScanBody({
   staffUserId: string;
   username: string;
 }) {
-  const [carriers, setCarriers] = useState<string[]>([]);
   const intake = usePackageIntake({
     societyId,
     staffUserId,
     defaultStaffName: username,
   });
-
-  useEffect(() => {
-    let active = true;
-    void getIntakeCarriers(societyId).then((items) => {
-      if (active) setCarriers(items);
-    });
-    return () => {
-      active = false;
-    };
-  }, [societyId]);
 
   if (intake.receipt) {
     return (
@@ -148,7 +136,6 @@ function StaffScanBody({
           name={intake.name}
           tower={intake.tower}
           flat={intake.flat}
-          carriers={carriers}
           onCourierChange={intake.setCourierEdited}
           onAwbChange={intake.setAwbEdited}
           onNameChange={intake.setNameEdited}

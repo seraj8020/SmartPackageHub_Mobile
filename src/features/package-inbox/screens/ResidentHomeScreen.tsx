@@ -10,15 +10,10 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import type { CompositeNavigationProp } from "@react-navigation/native";
-import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { resetToRoot } from "@/app/navigation/navigationHelpers";
-import type {
-  ResidentStackParamList,
-  ResidentTabParamList,
-} from "@/app/navigation/types";
+import type { ResidentStackParamList } from "@/app/navigation/types";
 import type { ResidentSessionState } from "@/features/authentication/models/auth.types";
 import {
   clearResidentSession,
@@ -40,10 +35,7 @@ import {
   societyLocationLabel,
 } from "@/shared/utils/greeting";
 
-type InboxNavigation = CompositeNavigationProp<
-  BottomTabNavigationProp<ResidentTabParamList, "Inbox">,
-  NativeStackNavigationProp<ResidentStackParamList>
->;
+type InboxNavigation = NativeStackNavigationProp<ResidentStackParamList, "Packages">;
 
 function preferenceChip(pkg: HubPackage): { text: string; styleKey: "violet" | "green" | "amber" } | null {
   if (pkg.preferredDeliveryMethod === "CounterPickup") {
@@ -108,6 +100,15 @@ export function ResidentHomeScreen() {
       (pkg.status ?? "Received") === "Received",
   ).length;
 
+  // Packages still at hub / out for delivery (API drops them once Delivered).
+  const awaitingCount = packages.filter((pkg) => {
+    const status = pkg.status ?? "Shelved";
+    return status === "Shelved" || status === "Dispatched";
+  }).length;
+
+  // Dot while something awaits the resident; COD pending also keeps the badge.
+  const showBellBadge = awaitingCount > 0 || pendingCodCount > 0;
+
   const load = useCallback(
     async (isRefresh = false) => {
       if (isRefresh) setRefreshing(true);
@@ -139,10 +140,16 @@ export function ResidentHomeScreen() {
   useFocusEffect(
     useCallback(() => {
       void load();
+      // Keep inbox (and bell badge) in sync when staff shelves a package while this screen is open.
+      const timer = setInterval(() => {
+        void load(true);
+      }, 10000);
+      return () => clearInterval(timer);
     }, [load]),
   );
 
   useEffect(() => {
+    // Faster poll while COD approval is outstanding.
     if (pendingCodCount === 0) return;
     const timer = setInterval(() => {
       void load(true);
@@ -157,7 +164,7 @@ export function ResidentHomeScreen() {
   }
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
+    <View style={styles.root}>
       {pendingCod ? (
         <CodApprovalDialog
           pkg={pendingCod}
@@ -191,19 +198,29 @@ export function ResidentHomeScreen() {
                 const next = packages.find(
                   (pkg) => pkg.isCod && pkg.codApprovalStatus === "Pending",
                 );
-                if (!next) return;
-                setDismissedCodIds((prev) => {
-                  const copy = new Set(prev);
-                  copy.delete(next.id);
-                  return copy;
-                });
+                if (next) {
+                  setDismissedCodIds((prev) => {
+                    const copy = new Set(prev);
+                    copy.delete(next.id);
+                    return copy;
+                  });
+                  return;
+                }
+                // No COD pending — refresh so newly shelved packages / badge update immediately.
+                void load(true);
               }}
               style={styles.bell}
               accessibilityRole="button"
-              accessibilityLabel="Notifications"
+              accessibilityLabel={
+                showBellBadge
+                  ? awaitingCount > 0
+                    ? `Notifications, ${awaitingCount} packages awaiting you`
+                    : "Notifications, COD approval needed"
+                  : "Notifications"
+              }
             >
               <Ionicons name="notifications-outline" size={18} color="rgba(255,255,255,0.85)" />
-              {pendingCodCount > 0 ? <View style={styles.bellDot} /> : null}
+              {showBellBadge ? <View style={styles.bellDot} /> : null}
             </Pressable>
             <SignOutButton onPress={() => void signOut()} />
           </View>

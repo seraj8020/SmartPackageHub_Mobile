@@ -4,6 +4,11 @@ export interface ParsedLabel {
   recipientName: string | null;
   tower: string | null;
   flatNumber: string | null;
+  /** Kilograms when present on the label. */
+  weightKg: string | null;
+  lengthCm: string | null;
+  widthCm: string | null;
+  heightCm: string | null;
 }
 
 const COURIERS: { name: string; pattern: RegExp }[] = [
@@ -131,6 +136,7 @@ const MANISHA_PRIYAMVADA_OCR =
 export function parseLabel(raw: string): ParsedLabel {
   const text = raw.replace(/\r/g, "\n").slice(0, 8000);
   const { tower, flatNumber } = findUnit(text);
+  const dims = findDimensions(text);
 
   return {
     courier: findCourier(text),
@@ -138,6 +144,10 @@ export function parseLabel(raw: string): ParsedLabel {
     recipientName: findName(text),
     tower,
     flatNumber,
+    weightKg: findWeightKg(text),
+    lengthCm: dims?.lengthCm ?? null,
+    widthCm: dims?.widthCm ?? null,
+    heightCm: dims?.heightCm ?? null,
   };
 }
 
@@ -360,7 +370,84 @@ function findFlatNearAddress(text: string): string | null {
 }
 
 function findCourier(text: string): string | null {
-  return COURIERS.find((courier) => courier.pattern.test(text))?.name ?? null;
+  const known = COURIERS.find((courier) => courier.pattern.test(text))?.name;
+  if (known) return known;
+
+  // "COURIER: Delhivery" / OCR "COURIE Delhivery" after ROUTING block.
+  const labeled = text.match(
+    /(?:\bcourier\b|\bcourie\b|\bcarrier\b)\s*[:#-]?\s*([A-Za-z][A-Za-z0-9 .&-]{1,28})/i,
+  );
+  if (labeled) {
+    const candidate = labeled[1].trim().replace(/\s+/g, " ");
+    const mapped = COURIERS.find((c) => c.pattern.test(candidate))?.name;
+    if (mapped) return mapped;
+    if (candidate.length >= 3 && !/routing|prepaid|weight|dimension|order/i.test(candidate)) {
+      return candidate.slice(0, 40);
+    }
+  }
+
+  return null;
+}
+
+function findWeightKg(text: string): string | null {
+  const kg = text.match(/\bweight\s*[:#-]?\s*([\d]+(?:[.,]\d+)?)\s*(?:kg|kgs)\b/i);
+  if (kg) return normalizeDecimal(kg[1]);
+
+  const grams = text.match(/\bweight\s*[:#-]?\s*([\d]+(?:[.,]\d+)?)\s*(?:g|gm|grams)\b/i);
+  if (grams) {
+    const g = Number(normalizeDecimal(grams[1]));
+    if (!Number.isFinite(g) || g <= 0) return null;
+    return trimTrailingZeros((g / 1000).toFixed(3));
+  }
+
+  // Bare "WEIGHT:0.13" with unit on next token or omitted (common OCR).
+  const bare = text.match(/\bweight\s*[:#-]?\s*([\d]+(?:[.,]\d+)?)\b/i);
+  if (bare) {
+    const value = Number(normalizeDecimal(bare[1]));
+    if (!Number.isFinite(value) || value <= 0) return null;
+    // Values like 130 with no unit are ambiguous; only trust small kg-range figures.
+    if (value > 50) return null;
+    return normalizeDecimal(bare[1]);
+  }
+
+  return null;
+}
+
+function findDimensions(
+  text: string,
+): { lengthCm: string; widthCm: string; heightCm: string } | null {
+  const labeled = text.match(
+    /\bdimensions?\s*[:#-]?\s*([\d]+(?:[.,]\d+)?)\s*[*x×X]\s*([\d]+(?:[.,]\d+)?)\s*[*x×X]\s*([\d]+(?:[.,]\d+)?)/i,
+  );
+  if (labeled) {
+    return {
+      lengthCm: normalizeDecimal(labeled[1]),
+      widthCm: normalizeDecimal(labeled[2]),
+      heightCm: normalizeDecimal(labeled[3]),
+    };
+  }
+
+  const inline = text.match(
+    /\b([\d]+(?:[.,]\d+)?)\s*[*x×X]\s*([\d]+(?:[.,]\d+)?)\s*[*x×X]\s*([\d]+(?:[.,]\d+)?)\s*(?:\(?\s*cm\)?)?/i,
+  );
+  if (inline) {
+    return {
+      lengthCm: normalizeDecimal(inline[1]),
+      widthCm: normalizeDecimal(inline[2]),
+      heightCm: normalizeDecimal(inline[3]),
+    };
+  }
+
+  return null;
+}
+
+function normalizeDecimal(value: string): string {
+  return value.replace(",", ".").trim();
+}
+
+function trimTrailingZeros(value: string): string {
+  if (!value.includes(".")) return value;
+  return value.replace(/\.?0+$/, "");
 }
 
 function findAwb(text: string): string | null {

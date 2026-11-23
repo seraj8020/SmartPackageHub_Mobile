@@ -6,7 +6,7 @@ import type { RootStackParamList } from "@/app/navigation/types";
 import { navigationRef } from "@/app/navigation/navigationRef";
 import { resolveInitialRoute } from "@/app/navigation/resolveInitialRoute";
 import { ResidentStackNavigator } from "@/app/navigation/ResidentStackNavigator";
-import { StaffTabNavigator } from "@/app/navigation/StaffTabNavigator";
+import { StaffStackNavigator } from "@/app/navigation/StaffStackNavigator";
 import { LaunchScreen } from "@/features/authentication/screens/LaunchScreen";
 import { ResidentOtpLoginScreen } from "@/features/authentication/screens/ResidentOtpLoginScreen";
 import { ResidentRegistrationScreen } from "@/features/authentication/screens/ResidentRegistrationScreen";
@@ -83,7 +83,7 @@ export function RootNavigator() {
         />
         <Stack.Screen
           name="StaffApp"
-          component={StaffTabNavigator}
+          component={StaffStackNavigator}
           options={{ headerShown: false, gestureEnabled: false }}
         />
       </Stack.Navigator>

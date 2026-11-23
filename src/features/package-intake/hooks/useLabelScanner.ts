@@ -11,6 +11,10 @@ type EditedFlags = {
   name: boolean;
   tower: boolean;
   flat: boolean;
+  weight: boolean;
+  length: boolean;
+  width: boolean;
+  height: boolean;
 };
 
 const emptyEdited = (): EditedFlags => ({
@@ -19,6 +23,10 @@ const emptyEdited = (): EditedFlags => ({
   name: false,
   tower: false,
   flat: false,
+  weight: false,
+  length: false,
+  width: false,
+  height: false,
 });
 
 function isExpoGo(): boolean {
@@ -88,6 +96,11 @@ export function useLabelScanner() {
   const [name, setName] = useState("");
   const [tower, setTower] = useState("");
   const [flat, setFlat] = useState("");
+  const [weight, setWeight] = useState("");
+  const [length, setLength] = useState("");
+  const [width, setWidth] = useState("");
+  const [height, setHeight] = useState("");
+  const [packageDetailsHint, setPackageDetailsHint] = useState(false);
 
   const wasFocused = useRef(isFocused);
 
@@ -125,6 +138,22 @@ export function useLabelScanner() {
   const setNameEdited = useCallback((value: string) => {
     edited.current.name = true;
     setName(value);
+  }, []);
+  const setWeightEdited = useCallback((value: string) => {
+    edited.current.weight = true;
+    setWeight(value);
+  }, []);
+  const setLengthEdited = useCallback((value: string) => {
+    edited.current.length = true;
+    setLength(value);
+  }, []);
+  const setWidthEdited = useCallback((value: string) => {
+    edited.current.width = true;
+    setWidth(value);
+  }, []);
+  const setHeightEdited = useCallback((value: string) => {
+    edited.current.height = true;
+    setHeight(value);
   }, []);
   const setTowerEdited = useCallback((value: string) => {
     edited.current.tower = true;
@@ -264,12 +293,21 @@ export function useLabelScanner() {
       if (!edited.current.name && parsed.recipientName) setName(parsed.recipientName);
       if (!edited.current.tower && parsed.tower) setTower(parsed.tower);
       if (!edited.current.flat && parsed.flatNumber) setFlat(parsed.flatNumber);
+      if (!edited.current.weight && parsed.weightKg) setWeight(parsed.weightKg);
+      if (!edited.current.length && parsed.lengthCm) setLength(parsed.lengthCm);
+      if (!edited.current.width && parsed.widthCm) setWidth(parsed.widthCm);
+      if (!edited.current.height && parsed.heightCm) setHeight(parsed.heightCm);
+      if (parsed.weightKg || parsed.lengthCm || parsed.widthCm || parsed.heightCm) {
+        setPackageDetailsHint(true);
+      }
       const filled = [
         parsed.courier,
         parsed.awb,
         parsed.recipientName,
         parsed.tower,
         parsed.flatNumber,
+        parsed.weightKg,
+        parsed.lengthCm,
       ].filter(Boolean).length;
       const score = ocr.text.length < 20 ? 30 : Math.min(95, 40 + filled * 12);
       setConfidence(score);
@@ -377,6 +415,11 @@ export function useLabelScanner() {
     setName("");
     setTower("");
     setFlat("");
+    setWeight("");
+    setLength("");
+    setWidth("");
+    setHeight("");
+    setPackageDetailsHint(false);
     setConfidence(null);
     setElapsedMs(null);
     setError(null);
@@ -418,12 +461,21 @@ export function useLabelScanner() {
     name,
     tower,
     flat,
+    weight,
+    length,
+    width,
+    height,
+    packageDetailsHint,
     setError,
     setCourierEdited,
     setAwbEdited,
     setNameEdited,
     setTowerEdited,
     setFlatEdited,
+    setWeightEdited,
+    setLengthEdited,
+    setWidthEdited,
+    setHeightEdited,
     applyResidentFields,
     hydrateEmptyFieldsFromResident,
     onBarcodeScanned,

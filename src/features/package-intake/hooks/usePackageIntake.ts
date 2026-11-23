@@ -7,7 +7,13 @@ import {
   type ConfirmIntakeResult,
   type ResidentMatch,
 } from "@/features/package-intake/services/intakeApi";
-import { STAFF_NAME_STORAGE_KEY } from "@/features/package-intake/constants";
+import {
+  DEFAULT_INTAKE_HEIGHT_CM,
+  DEFAULT_INTAKE_LENGTH_CM,
+  DEFAULT_INTAKE_WEIGHT_KG,
+  DEFAULT_INTAKE_WIDTH_CM,
+  STAFF_NAME_STORAGE_KEY,
+} from "@/features/package-intake/constants";
 import { createClientId } from "@/shared/utils/createClientId";
 import { useLabelScanner } from "@/features/package-intake/hooks/useLabelScanner";
 import { useResidentMatching } from "@/features/package-intake/hooks/useResidentMatching";
@@ -44,10 +50,6 @@ export function usePackageIntake(options: {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [category, setCategory] = useState("");
   const [isColdStorage, setIsColdStorage] = useState(false);
-  const [weight, setWeight] = useState("");
-  const [length, setLength] = useState("");
-  const [width, setWidth] = useState("");
-  const [height, setHeight] = useState("");
   const [isCod, setIsCod] = useState(false);
   const [codAmount, setCodAmount] = useState("");
   const [damaged, setDamaged] = useState(false);
@@ -88,6 +90,11 @@ export function usePackageIntake(options: {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- applyResidentFields is stable enough per selected id
   }, [matching.match.status, matching.selected?.id]);
 
+  // Open package details when OCR fills weight / dimensions.
+  useEffect(() => {
+    if (scanner.packageDetailsHint) setDetailsOpen(true);
+  }, [scanner.packageDetailsHint]);
+
   function chooseResident(resident: ResidentMatch) {
     matching.selectResident(resident);
     scanner.applyResidentFields(resident);
@@ -124,6 +131,13 @@ export function usePackageIntake(options: {
     const trimmedName = staffName.trim() || "Hub Staff";
     await SecureStore.setItemAsync(STAFF_NAME_STORAGE_KEY, trimmedName);
 
+    const courier = scanner.courier.trim();
+    if (!courier) {
+      scanner.setError("Courier is required. Enter the courier name if OCR did not fill it.");
+      setBusy(false);
+      return;
+    }
+
     if (isCod && !parsePositiveNumber(codAmount)) {
       scanner.setError("Enter a valid COD amount when pay on delivery is required.");
       setDetailsOpen(true);
@@ -134,7 +148,7 @@ export function usePackageIntake(options: {
     const payload = {
       awb: scanner.awb.trim(),
       barcode: scanner.barcodeRef.current || undefined,
-      courier: scanner.courier,
+      courier,
       recipientName: scanner.name.trim() || undefined,
       tower: scanner.tower.trim() || undefined,
       flatNumber: scanner.flat.trim() || undefined,
@@ -151,10 +165,10 @@ export function usePackageIntake(options: {
       matchStatus: matching.selected ? matching.matchMode : "missing",
       category: category.trim() || undefined,
       isColdStorage,
-      weight: parsePositiveNumber(weight),
-      length: parsePositiveNumber(length),
-      width: parsePositiveNumber(width),
-      height: parsePositiveNumber(height),
+      weight: parsePositiveNumber(scanner.weight) ?? DEFAULT_INTAKE_WEIGHT_KG,
+      length: parsePositiveNumber(scanner.length) ?? DEFAULT_INTAKE_LENGTH_CM,
+      width: parsePositiveNumber(scanner.width) ?? DEFAULT_INTAKE_WIDTH_CM,
+      height: parsePositiveNumber(scanner.height) ?? DEFAULT_INTAKE_HEIGHT_CM,
       isCod,
       codAmount: isCod ? parsePositiveNumber(codAmount) : undefined,
     };
@@ -220,10 +234,6 @@ export function usePackageIntake(options: {
     setDetailsOpen(false);
     setCategory("");
     setIsColdStorage(false);
-    setWeight("");
-    setLength("");
-    setWidth("");
-    setHeight("");
     setIsCod(false);
     setCodAmount("");
     setDamaged(false);
@@ -236,6 +246,7 @@ export function usePackageIntake(options: {
 
   const canConfirm =
     scanner.awb.trim().length >= 6 &&
+    scanner.courier.trim().length >= 2 &&
     !matching.ambiguous &&
     (Boolean(matching.selected) || scanner.flat.trim().length >= 2) &&
     !busy;
@@ -255,14 +266,14 @@ export function usePackageIntake(options: {
     setCategory,
     isColdStorage,
     setIsColdStorage,
-    weight,
-    setWeight,
-    length,
-    setLength,
-    width,
-    setWidth,
-    height,
-    setHeight,
+    weight: scanner.weight,
+    setWeight: scanner.setWeightEdited,
+    length: scanner.length,
+    setLength: scanner.setLengthEdited,
+    width: scanner.width,
+    setWidth: scanner.setWidthEdited,
+    height: scanner.height,
+    setHeight: scanner.setHeightEdited,
     isCod,
     setIsCod,
     codAmount,
