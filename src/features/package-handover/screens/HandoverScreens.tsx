@@ -19,6 +19,7 @@ import {
   getSocietyDispatchedPackages,
   generatePackagePickupOtp,
   markPackageDelivered,
+  reShelveAfterFailedDelivery,
   type DeliveryMethod,
   type HubPackage,
 } from "@/shared/services/packageApi";
@@ -374,8 +375,29 @@ function HandoverForm({ pkg, onBack, onDelivered }: { pkg: HubPackage; onBack: (
     }
   }
 
+  async function returnToShelf() {
+    if (otpActionRef.current) return;
+    otpActionRef.current = "generate";
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await reShelveAfterFailedDelivery(pkg.id);
+      onDelivered(pkg.id);
+      setOtpNotice(result.message ?? `Returned to hub slot ${pkg.shelfCode ?? ""}.`.trim());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to return package to shelf.");
+    } finally {
+      otpActionRef.current = null;
+      setBusy(false);
+    }
+  }
+
   const unit = formatUnitLabel(pkg.tower, pkg.flat);
-  const subtitle = [unit !== "—" ? unit : null, pkg.category !== "Parcel" ? pkg.category : null].filter(Boolean).join(" · ");
+  const subtitle = [
+    unit !== "—" ? unit : null,
+    pkg.shelfCode ? `Slot ${pkg.shelfCode}` : null,
+    pkg.category !== "Parcel" ? pkg.category : null,
+  ].filter(Boolean).join(" · ");
 
   return (
     <View style={styles.root}>
@@ -384,6 +406,7 @@ function HandoverForm({ pkg, onBack, onDelivered }: { pkg: HubPackage; onBack: (
         <View style={[CARD, styles.packageSummary]}>
           <Text style={styles.summaryTracking} numberOfLines={1}>{pkg.tracking || pkg.id}</Text>
           <Text style={styles.summaryMeta}>{pkg.courier}{pkg.weight ? ` · ${pkg.weight}` : ""}</Text>
+          {pkg.shelfCode ? <Text style={styles.slotBadge}>Hub slot {pkg.shelfCode} (reserved)</Text> : null}
         </View>
 
         <View style={styles.scannerCard}>
@@ -391,14 +414,6 @@ function HandoverForm({ pkg, onBack, onDelivered }: { pkg: HubPackage; onBack: (
             <>
               <CameraView style={StyleSheet.absoluteFill} facing="back" barcodeScannerSettings={{ barcodeTypes: ["qr"] }} onBarcodeScanned={onCodeDetected} />
               <Pressable style={styles.closeCamera} onPress={() => setCameraMode("off")}><Ionicons name="close" size={20} color="#fff" /></Pressable>
-            </>
-          ) : cameraMode === "photo" ? (
-            <>
-              <CameraView ref={photoCameraRef} style={StyleSheet.absoluteFill} facing="back" />
-              <Pressable style={styles.closeCamera} onPress={() => setCameraMode("off")}><Ionicons name="close" size={20} color="#fff" /></Pressable>
-              <Pressable style={styles.capturePhotoBtn} onPress={() => void captureEvidencePhoto()} accessibilityRole="button" accessibilityLabel="Capture proof photo">
-                <View style={styles.capturePhotoInner} />
-              </Pressable>
             </>
           ) : (
             <View style={styles.scanIdle}>
@@ -424,10 +439,10 @@ function HandoverForm({ pkg, onBack, onDelivered }: { pkg: HubPackage; onBack: (
             onPress={() => void generateOtp()}
             disabled={generatingOtp || busy}
             accessibilityRole="button"
-            accessibilityLabel="Generate and send a new pickup OTP"
+            accessibilityLabel="Lost OTP, generate and send a new pickup OTP"
           >
             {generatingOtp ? <ActivityIndicator size="small" color={colors.primary} /> : <Ionicons name="refresh-outline" size={15} color={colors.primary} />}
-            <Text style={styles.generateOtpText}>{generatingOtp ? "Generating…" : "Generate new OTP & SMS"}</Text>
+            <Text style={styles.generateOtpText}>{generatingOtp ? "Generating…" : "Lost OTP, Generate new OTP & SMS"}</Text>
           </Pressable>
           {generatedOtp ? (
             <View style={styles.generatedOtpBox}>
@@ -435,9 +450,7 @@ function HandoverForm({ pkg, onBack, onDelivered }: { pkg: HubPackage; onBack: (
               <Text style={styles.generatedOtpValue}>{generatedOtp.replace(/(\d{3})(?=\d)/, "$1 ")}</Text>
               {otpNotice ? <Text style={styles.otpNotice}>{otpNotice}</Text> : null}
             </View>
-          ) : (
-            <Text style={styles.otpPrompt}>Generate a fresh 6-digit code — it is SMS’d to the resident and filled below for verify.</Text>
-          )}
+          ) : null}
           <Text style={styles.enterLabel}>ENTER / CONFIRM OTP</Text>
           <TextInput
             style={styles.otpInput}
@@ -465,7 +478,7 @@ function HandoverForm({ pkg, onBack, onDelivered }: { pkg: HubPackage; onBack: (
         <View style={[CARD, styles.podCard]}>
           <Text style={styles.fieldLabel}>PROOF OF DELIVERY (OPTIONAL)</Text>
           <Text style={styles.podHint}>
-            Photo and signature are optional. OTP alone completes delivery if the resident is in a hurry.
+            Photo and signature are optional. OTP alone completes delivery.
           </Text>
 
           <Text style={styles.enterLabel}>SIGNED BY</Text>
@@ -490,7 +503,34 @@ function HandoverForm({ pkg, onBack, onDelivered }: { pkg: HubPackage; onBack: (
           />
 
           <Text style={styles.enterLabel}>PHOTO EVIDENCE</Text>
-          {photoBase64 ? (
+          {cameraMode === "photo" ? (
+            <View style={styles.photoCaptureBlock}>
+              <View style={styles.photoCameraWrap}>
+                <CameraView ref={photoCameraRef} style={styles.photoCamera} facing="back" />
+              </View>
+              <View style={styles.photoActions}>
+                <Pressable
+                  style={styles.secondaryBtn}
+                  onPress={() => void captureEvidencePhoto()}
+                  disabled={busy}
+                  accessibilityRole="button"
+                  accessibilityLabel="Capture proof of delivery photo"
+                >
+                  <Ionicons name="camera-outline" size={16} color={colors.primary} />
+                  <Text style={styles.secondaryBtnText}>Capture photo</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.secondaryBtn}
+                  onPress={() => setCameraMode("off")}
+                  disabled={busy}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel camera"
+                >
+                  <Text style={styles.secondaryBtnText}>Cancel</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : photoBase64 ? (
             <View style={styles.photoPreviewWrap}>
               <Image
                 source={{ uri: `data:image/jpeg;base64,${photoBase64}` }}
@@ -536,6 +576,18 @@ function HandoverForm({ pkg, onBack, onDelivered }: { pkg: HubPackage; onBack: (
         </View>
 
         {error ? <View style={styles.errorBox}><Text style={styles.handoverError}>{error}</Text></View> : null}
+        {otpNotice && !generatedOtp ? (
+          <View style={styles.reshelveNotice}><Text style={styles.reshelveNoticeText}>{otpNotice}</Text></View>
+        ) : null}
+        <Pressable
+          style={({ pressed }) => [styles.reshelveButton, (busy || generatingOtp || pressed) && styles.verifyPressed]}
+          onPress={() => void returnToShelf()}
+          disabled={busy || generatingOtp}
+          accessibilityRole="button"
+          accessibilityLabel="Resident not available, return package to hub shelf"
+        >
+          <Text style={styles.reshelveText}>Resident not available — return to shelf</Text>
+        </Pressable>
         <Pressable style={({ pressed }) => [styles.verifyButton, (busy || generatingOtp || pressed) && styles.verifyPressed]} onPress={() => void submit()} disabled={busy || generatingOtp}>
           {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.verifyText}>Save & deliver</Text>}
         </Pressable>
@@ -680,6 +732,38 @@ const styles = StyleSheet.create({
   packageSummary: { paddingHorizontal: 12, paddingVertical: 12, borderRadius: 12, shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 2, elevation: 1 },
   summaryTracking: { color: "#1A2332", fontSize: 12, fontWeight: "700", fontFamily: "monospace" },
   summaryMeta: { color: "#6B7280", fontSize: 10, marginTop: 4 },
+  slotBadge: {
+    alignSelf: "flex-start",
+    marginTop: 6,
+    overflow: "hidden",
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: "#EEF4F8",
+    color: colors.primary,
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  reshelveButton: {
+    minHeight: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#F59E0B",
+    backgroundColor: "#FFFBEB",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  reshelveText: { color: "#92400E", fontSize: 12, fontWeight: "700", textAlign: "center" },
+  reshelveNotice: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    backgroundColor: "#F0FDF4",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  reshelveNoticeText: { color: "#166534", fontSize: 11, lineHeight: 16 },
   scannerCard: { minHeight: 128, borderRadius: 12, overflow: "hidden", backgroundColor: "#B8D9EF", justifyContent: "center", padding: 14 },
   scanIdle: { alignItems: "center", justifyContent: "center", gap: 10 },
   scanHint: { color: "#244B69", fontSize: 11, lineHeight: 16, textAlign: "center", paddingHorizontal: 8 },
@@ -694,13 +778,12 @@ const styles = StyleSheet.create({
   generateOtpButton: { minHeight: 40, width: "100%", borderRadius: 10, paddingHorizontal: 12, marginBottom: 10, backgroundColor: "#EEF4F8", borderWidth: 1, borderColor: "#D7E6F0", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
   generateOtpPressed: { opacity: 0.7 },
   generateOtpDisabled: { opacity: 0.55 },
-  generateOtpText: { color: colors.primary, fontSize: 12, fontWeight: "700" },
+  generateOtpText: { color: colors.primary, fontSize: 11, fontWeight: "700", textAlign: "center", flexShrink: 1 },
   generatedOtpBox: { backgroundColor: "#F0FDF4", borderColor: "#BBF7D0", borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 10, alignItems: "center" },
   generatedOtpLabel: { color: "#15803D", fontSize: 9, fontWeight: "800", letterSpacing: 1 },
   generatedOtpValue: { color: colors.primary, fontSize: 24, fontWeight: "800", letterSpacing: 4, fontFamily: "monospace", marginTop: 4 },
   otpNotice: { color: "#166534", fontSize: 10, lineHeight: 14, marginTop: 6, textAlign: "center" },
-  otpPrompt: { color: "#6B7280", fontSize: 11, lineHeight: 15, marginBottom: 10 },
-  enterLabel: { color: "#718096", fontSize: 9, fontWeight: "700", letterSpacing: 1, marginBottom: 6 },
+  enterLabel: { color: "#718096", fontSize: 9, fontWeight: "700", letterSpacing: 1, marginBottom: 6, marginTop: 4 },
   otpInput: { height: 46, borderRadius: 10, borderWidth: 1, borderColor: "#E5E7EB", backgroundColor: "#F8F7F4", textAlign: "center", color: colors.primary, fontSize: 18, fontWeight: "700", letterSpacing: 5, fontFamily: "monospace" },
   methodCard: { paddingHorizontal: 12, paddingVertical: 12, borderRadius: 12, shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 2, elevation: 1 },
   preference: { color: "#6B7280", fontSize: 10, lineHeight: 15, marginBottom: 8 },
@@ -715,23 +798,23 @@ const styles = StyleSheet.create({
   verifyButton: { minHeight: 46, borderRadius: 12, backgroundColor: "#22C55E", alignItems: "center", justifyContent: "center", paddingHorizontal: 14, marginTop: 2 },
   verifyPressed: { opacity: 0.72 },
   verifyText: { color: "#fff", fontSize: 13, fontWeight: "800" },
-  podCard: { paddingHorizontal: 12, paddingVertical: 12, borderRadius: 12, gap: 4, shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 2, elevation: 1 },
-  podHint: { color: "#6B7280", fontSize: 11, lineHeight: 15, marginBottom: 10 },
+  podCard: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, gap: 2, shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 2, elevation: 1 },
+  podHint: { color: "#6B7280", fontSize: 11, lineHeight: 15, marginBottom: 6 },
   noteInput: {
-    minHeight: 42,
+    minHeight: 40,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: "#E5E7EB",
     backgroundColor: "#F8F7F4",
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 8,
     color: colors.text,
     fontSize: 13,
-    marginBottom: 10,
+    marginBottom: 6,
   },
-  noteMultiline: { minHeight: 64, textAlignVertical: "top" },
+  noteMultiline: { minHeight: 56, textAlignVertical: "top" },
   secondaryBtn: {
-    minHeight: 40,
+    minHeight: 36,
     borderRadius: 10,
     paddingHorizontal: 12,
     backgroundColor: "#EEF4F8",
@@ -741,28 +824,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    marginBottom: 8,
+    marginBottom: 4,
   },
   secondaryBtnText: { color: colors.primary, fontSize: 12, fontWeight: "700" },
-  photoPreviewWrap: { marginBottom: 8 },
-  photoPreview: { width: "100%", height: 160, borderRadius: 10, backgroundColor: "#E5E7EB" },
-  photoActions: { flexDirection: "row", gap: 8, marginTop: 8 },
-  capturePhotoBtn: {
-    position: "absolute",
-    bottom: 14,
-    alignSelf: "center",
-    left: "50%",
-    marginLeft: -32,
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    borderWidth: 3,
-    borderColor: "#fff",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(0,0,0,0.25)",
+  photoCaptureBlock: { marginBottom: 4, gap: 6 },
+  photoCameraWrap: {
+    height: 180,
+    borderRadius: 10,
+    overflow: "hidden",
+    backgroundColor: "#111827",
   },
-  capturePhotoInner: { width: 48, height: 48, borderRadius: 24, backgroundColor: "#fff" },
+  photoCamera: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0 },
+  photoPreviewWrap: { marginBottom: 4 },
+  photoPreview: { width: "100%", height: 140, borderRadius: 10, backgroundColor: "#E5E7EB" },
+  photoActions: { flexDirection: "row", gap: 8 },
   deliveredCard: { borderColor: "#6EE7B7", padding: 12, borderRadius: 13, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
   deliveredHeader: { flexDirection: "row", gap: 8, marginBottom: 8 },
   deliveredBadge: { minHeight: 34, backgroundColor: "#ECFDF5", borderRadius: 9, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingHorizontal: 8 },

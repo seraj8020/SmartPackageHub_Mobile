@@ -305,19 +305,50 @@ export async function dispatchPackage(
     | {
         success?: boolean;
         Success?: boolean;
+        succeeded?: boolean;
+        Succeeded?: boolean;
         message?: string;
         Message?: string;
       }
     | undefined;
   const body = typeof result === "object" && result !== null ? result : undefined;
   const message = body?.message ?? body?.Message;
-  const succeeded = result === true || body?.success === true || body?.Success === true;
+  const succeeded = result === true || body?.success === true || body?.Success === true ||
+    body?.succeeded === true || body?.Succeeded === true;
 
   if (!response.ok) {
     throw new Error(message ?? `Package dispatch failed (${response.status})`);
   }
   if (!succeeded) {
     throw new Error(message ?? "Package dispatch failed.");
+  }
+  return { success: true, packageId, message };
+}
+
+/** Resident unavailable at door — return package to hub; shelf slot stays reserved. */
+export async function reShelveAfterFailedDelivery(
+  packageId: string,
+): Promise<PackageStatusUpdateResponse> {
+  const response = await apiFetch(
+    `${API}/packages/${encodeURIComponent(packageId)}/re-shelve-failed-delivery`,
+    {
+      method: "POST",
+      headers: await authHeaders(),
+    },
+  );
+  const body = (await response.json().catch(() => ({}))) as {
+    succeeded?: boolean;
+    Succeeded?: boolean;
+    message?: string;
+    Message?: string;
+  };
+  const message = body.message ?? body.Message;
+  const succeeded = body.succeeded === true || body.Succeeded === true;
+  if (!response.ok) {
+    throw new Error(message ?? `Unable to return package to shelf (${response.status})`);
+  }
+  if (!succeeded) {
+    throw new Error(message ?? "Unable to return package to shelf.");
   }
   return { success: true, packageId, message };
 }

@@ -156,8 +156,8 @@ const styles = StyleSheet.create({
   },
   clear: { fontSize: 12, fontWeight: "700", color: colors.primary },
   pad: {
-    height: 140,
-    borderRadius: 12,
+    height: 84,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: "#E5E7EB",
     backgroundColor: "#fff",
@@ -166,9 +166,9 @@ const styles = StyleSheet.create({
   placeholder: {
     position: "absolute",
     alignSelf: "center",
-    top: "42%",
+    top: "36%",
     color: "#D1D5DB",
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: "600",
   },
 });

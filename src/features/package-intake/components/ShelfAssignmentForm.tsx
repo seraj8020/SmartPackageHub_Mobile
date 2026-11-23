@@ -39,13 +39,13 @@ export function ShelfAssignmentForm({
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.title}>Assign shelf</Text>
+      <Text style={styles.title}>Assign hub slot</Text>
       <Text style={styles.hint}>
         {selected
           ? `${selected.code} · ${selected.isColdStorage ? "Cold" : "Ambient"} · ${
-              selected.isFull ? "at capacity (still assignable)" : `${selected.remaining} left`
+              selected.isFull ? "occupied / reserved" : `${selected.remaining} free`
             }`
-          : "Pick a shelf code (full shelves remain assignable)"}
+          : "Pick a slot code (e.g. A-12-3). Full slots stay reserved while dispatched."}
       </Text>
 
       <View style={styles.tabRow}>
@@ -69,7 +69,7 @@ export function ShelfAssignmentForm({
       </View>
 
       {loading ? (
-        <Text style={styles.muted}>Loading shelf free slots…</Text>
+        <Text style={styles.muted}>Loading free slots…</Text>
       ) : loadError ? (
         <View style={styles.errorBox}>
           <Text style={styles.errorText}>{loadError}</Text>
@@ -82,8 +82,8 @@ export function ShelfAssignmentForm({
       ) : options.length === 0 ? (
         <Text style={styles.muted}>
           {storageFilter === "cold"
-            ? "No cold shelves configured for this society."
-            : "No ambient shelves for this resident's tower. Configure matching shelves in Admin → Shelves."}
+            ? "No cold slots configured for this society."
+            : "No ambient slots for this resident's tower. Configure matching slots in Admin → Shelves."}
         </Text>
       ) : (
         <>
