@@ -4,8 +4,8 @@ import { ResidentHubHomeScreen } from "@/features/package-inbox/screens/Resident
 import { ResidentHomeScreen } from "@/features/package-inbox/screens/ResidentHomeScreen";
 import { ResidentHistoryScreen } from "@/features/package-inbox/screens/ResidentHistoryScreen";
 import { ResidentProfileScreen } from "@/features/package-inbox/screens/ResidentProfileScreen";
-import { ResidentPlaceholderScreen } from "@/features/package-inbox/screens/ResidentPlaceholderScreen";
 import { DoorDeliverySlotScreen } from "@/features/delivery-slots/screens/DoorDeliverySlotScreen";
+import { VacationHoldScreen } from "@/features/vacation-hold/screens/VacationHoldScreen";
 import { colors } from "@/shared/theme/colors";
 import { hubColors } from "@/shared/ui/hub/hubTheme";
 
@@ -18,15 +18,6 @@ const detailScreenOptions = {
   headerShadowVisible: false,
   contentStyle: { backgroundColor: colors.background },
 };
-
-function VacationScreen() {
-  return (
-    <ResidentPlaceholderScreen
-      title="Vacation hold"
-      body="Pause door delivery while you are away."
-    />
-  );
-}
 
 export function ResidentStackNavigator() {
   return (
@@ -47,7 +38,11 @@ export function ResidentStackNavigator() {
         options={{ ...detailScreenOptions, title: "My packages" }}
       />
       <Stack.Screen name="History" component={ResidentHistoryScreen} options={{ ...detailScreenOptions, title: "History" }} />
-      <Stack.Screen name="Vacation" component={VacationScreen} options={{ ...detailScreenOptions, title: "Vacation" }} />
+      <Stack.Screen
+        name="Vacation"
+        component={VacationHoldScreen}
+        options={{ ...detailScreenOptions, headerShown: false, title: "Vacation" }}
+      />
       <Stack.Screen name="Profile" component={ResidentProfileScreen} options={{ ...detailScreenOptions, title: "Profile" }} />
       <Stack.Screen
         name="DeliveryPreference"

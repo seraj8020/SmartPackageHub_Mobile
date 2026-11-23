@@ -8,18 +8,9 @@ import {
 import { ResidentHomeScreen } from "@/features/package-inbox/screens/ResidentHomeScreen";
 import { ResidentHistoryScreen } from "@/features/package-inbox/screens/ResidentHistoryScreen";
 import { ResidentProfileScreen } from "@/features/package-inbox/screens/ResidentProfileScreen";
-import { ResidentPlaceholderScreen } from "@/features/package-inbox/screens/ResidentPlaceholderScreen";
+import { VacationHoldScreen } from "@/features/vacation-hold/screens/VacationHoldScreen";
 
 const Tab = createBottomTabNavigator<ResidentTabParamList>();
-
-function VacationScreen() {
-  return (
-    <ResidentPlaceholderScreen
-      title="Vacation hold"
-      body="Pause door delivery while you are away (same Vacation tab as web)."
-    />
-  );
-}
 
 export function ResidentTabNavigator() {
   return (
@@ -48,7 +39,7 @@ export function ResidentTabNavigator() {
       />
       <Tab.Screen
         name="Vacation"
-        component={VacationScreen}
+        component={VacationHoldScreen}
         options={{
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="calendar-outline" size={size - 2} color={color} />
