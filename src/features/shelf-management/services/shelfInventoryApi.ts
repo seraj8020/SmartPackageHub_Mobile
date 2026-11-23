@@ -30,6 +30,7 @@ export function mapShelfInventoryRow(row: Record<string, unknown>): ShelfInvento
     id: textOf(row, "id", "Id"),
     code: textOf(row, "code", "Code"),
     towerOrWing: textOf(row, "towerOrWing", "TowerOrWing") || undefined,
+    zone: textOf(row, "zone", "Zone") || undefined,
     capacity: Number(row.capacity ?? row.Capacity) || 0,
     packageCount: Number(row.packageCount ?? row.PackageCount) || 0,
     isFull: row.isFull === true || row.IsFull === true,

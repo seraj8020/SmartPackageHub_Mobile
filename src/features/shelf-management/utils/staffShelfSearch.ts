@@ -25,16 +25,18 @@ export function shelfMatchesSearch(shelf: ShelfInventoryItem, query: string): bo
   return shelf.packages.some((pkg) => packageMatchesSearch(pkg, query));
 }
 
-/** Staff tile badge: occupancy first; hold only when cold + overdue. */
+export type StaffShelfTone = "empty" | "occupied" | "full" | "coldHold" | "cold" | "count";
+
+/** Staff tile badge: free vs occupied first; hold only when cold + overdue. */
 export function staffShelfBadge(
   shelf: ShelfInventoryItem,
   now: number,
-): { label: string; tone: "empty" | "full" | "coldHold" | "cold" | "count" } {
+): { label: string; tone: StaffShelfTone } {
   if (shelf.packageCount === 0) {
-    return { label: "Empty", tone: "empty" };
+    return { label: "Free", tone: "empty" };
   }
   if (shelf.isFull) {
-    return { label: "Full", tone: "full" };
+    return { label: "Occupied", tone: "full" };
   }
   if (shelf.isColdStorage) {
     const heldCold = shelf.packages.some((pkg) => isHeld24h(pkg.receivedAt, now));
@@ -44,7 +46,7 @@ export function staffShelfBadge(
     return { label: "Cold", tone: "cold" };
   }
   return {
-    label: String(shelf.packageCount),
-    tone: "count",
+    label: `${shelf.packageCount} on shelf`,
+    tone: "occupied",
   };
 }
