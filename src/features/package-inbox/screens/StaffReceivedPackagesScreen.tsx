@@ -152,9 +152,9 @@ function StaffReceivedBody({
   const shelfPicker = useShelfPicker(societyId);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [shelf, setShelf] = useState("A-1");
-  const [row, setRow] = useState("A");
-  const [suggested, setSuggested] = useState("A-1");
+  const [shelf, setShelf] = useState("");
+  const [row, setRow] = useState("");
+  const [suggested, setSuggested] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<ConfirmIntakeResult | null>(null);
@@ -171,17 +171,21 @@ function StaffReceivedBody({
     : received;
   const selectedShelf = shelfPicker.findOption(shelf);
 
-  useEffect(() => {
-    if (!societyId) return;
-    suggestShelf(societyId)
-      .then((result) => {
-        if (!result.shelfCode) return;
-        setSuggested(result.shelfCode);
-        setShelf(result.shelfCode);
-        setRow(rowFromShelfCode(result.shelfCode));
-      })
-      .catch(() => undefined);
-  }, [societyId]);
+  // Admin may change shelf codes/capacity while staff is logged in — refetch on every focus.
+  useFocusEffect(
+    useCallback(() => {
+      if (!societyId) return;
+      shelfPicker.reload();
+      void suggestShelf(societyId)
+        .then((result) => {
+          if (!result.shelfCode) return;
+          setSuggested(result.shelfCode);
+          setShelf(result.shelfCode);
+          setRow(rowFromShelfCode(result.shelfCode));
+        })
+        .catch(() => undefined);
+    }, [societyId, shelfPicker.reload]),
+  );
 
   useEffect(() => {
     if (shelfPicker.visible.length === 0) return;

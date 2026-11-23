@@ -1,6 +1,7 @@
 import type { ShelfInventoryItem } from "@/features/shelf-management/models/shelfInventory.types";
 
-export const DEFAULT_SHELF_CAPACITY = 40;
+/** @deprecated Kept for tests that referenced the old Traizr default; picker uses real capacity. */
+export const DEFAULT_SHELF_CAPACITY = 1;
 
 export type ShelfPickerOption = {
   id: string;
@@ -14,8 +15,10 @@ export type ShelfPickerOption = {
   isColdStorage: boolean;
 };
 
+/** Use API capacity as-is. Do not invent a large default (old code used 40). */
 export function effectiveCapacity(capacity: number | null | undefined): number {
-  return capacity && capacity > 0 ? capacity : DEFAULT_SHELF_CAPACITY;
+  if (capacity == null || !Number.isFinite(capacity) || capacity < 0) return 0;
+  return Math.floor(capacity);
 }
 
 export function remainingSlots(capacity: number, packageCount: number): number {
