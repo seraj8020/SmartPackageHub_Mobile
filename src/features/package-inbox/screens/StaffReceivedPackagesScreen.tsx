@@ -5,6 +5,7 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
+  TextInput,
   Text,
   View,
 } from "react-native";
@@ -31,6 +32,8 @@ import { getSocieties, type HubPackage } from "@/shared/services/packageApi";
 import { tokenStorage } from "@/shared/services/tokenStorage";
 import { colors } from "@/shared/theme/colors";
 import { formatUnitLabel } from "@/shared/utils/formatUnitLabel";
+import { clearStaffPackagesCache } from "@/features/package-inbox/services/staffPackageCache";
+import { invalidateDispatchedPackagesCache } from "@/features/package-handover/services/handoverPackageCache";
 
 function codLabel(pkg: HubPackage): string | null {
   if (!pkg.isCod) return null;
@@ -111,6 +114,12 @@ export function StaffReceivedPackagesScreen() {
       topInset={insets.top}
       sideInset={Math.max(insets.left, insets.right, 0)}
       onSignOut={async () => {
+        for (const cachedSocietyId of new Set(session.societyIds ?? [societyId])) {
+          if (cachedSocietyId) {
+            clearStaffPackagesCache(cachedSocietyId);
+            invalidateDispatchedPackagesCache(cachedSocietyId);
+          }
+        }
         await clearStaffSession();
         await tokenStorage.removeToken();
         resetToRoot(navigation, "Launch");
@@ -136,9 +145,9 @@ function StaffReceivedBody({
 }) {
   const {
     hubPackages,
-    loadingPackages,
     packageLoadError,
     reload,
+    markShelved,
   } = useStaffReceive(societyId);
   const shelfPicker = useShelfPicker(societyId);
 
@@ -150,8 +159,16 @@ function StaffReceivedBody({
   const [error, setError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<ConfirmIntakeResult | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [search, setSearch] = useState("");
 
   const received = hubPackages.filter((pkg) => (pkg.status ?? "Received") === "Received");
+  const normalizedSearch = search.trim().toLocaleLowerCase();
+  const filteredReceived = normalizedSearch
+    ? received.filter((pkg) =>
+        [pkg.recipientName, pkg.tower, pkg.towerWing, pkg.flat, pkg.flatNumber]
+          .some((value) => value?.toLocaleLowerCase().includes(normalizedSearch)),
+      )
+    : received;
   const selectedShelf = shelfPicker.findOption(shelf);
 
   useEffect(() => {
@@ -234,6 +251,7 @@ function StaffReceivedBody({
     try {
       const isCold = selectedShelf?.isColdStorage ?? Boolean(pkg.isColdStorage);
       const result = await assignShelf(pkg.id, shelf, isCold);
+      markShelved(pkg, result.shelfCode || shelf, isCold);
       shelfPicker.markAssigned(shelf);
       setReceipt(result);
       setSelectedId(null);
@@ -287,15 +305,32 @@ function StaffReceivedBody({
         }
       >
         <View style={styles.countRow}>
-          <Text style={styles.countLabel}>Waiting ({received.length})</Text>
+          <Text style={styles.countLabel}>Waiting ({filteredReceived.length})</Text>
           <Pressable onPress={() => void onRefresh()} hitSlop={8}>
             <Ionicons name="refresh" size={16} color={colors.primary} />
           </Pressable>
         </View>
 
-        {loadingPackages && received.length === 0 ? (
-          <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} />
-        ) : packageLoadError ? (
+        <View style={styles.searchBox}>
+          <Ionicons name="search" size={17} color="#9CA3AF" />
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search name, tower or flat"
+            placeholderTextColor="#9CA3AF"
+            autoCapitalize="none"
+            returnKeyType="search"
+            style={styles.searchInput}
+            accessibilityLabel="Search received packages by name, tower or flat"
+          />
+          {search.length > 0 ? (
+            <Pressable onPress={() => setSearch("")} hitSlop={8} accessibilityLabel="Clear search">
+              <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+            </Pressable>
+          ) : null}
+        </View>
+
+        {packageLoadError && received.length === 0 ? (
           <View style={styles.errorBox}>
             <Text style={styles.errorText}>{packageLoadError}</Text>
             <Pressable onPress={reload}>
@@ -311,7 +346,12 @@ function StaffReceivedBody({
             </Text>
           </View>
         ) : (
-          received.map((pkg) => {
+          filteredReceived.length === 0 ? (
+            <View style={styles.empty}>
+              <Text style={styles.emptyTitle}>No matching packages</Text>
+              <Text style={styles.emptyBody}>Try another name, tower or flat.</Text>
+            </View>
+          ) : filteredReceived.map((pkg) => {
             const open = selectedId === pkg.id;
             const assignable = canAssignShelf(pkg);
             const cod = codLabel(pkg);
@@ -412,6 +452,19 @@ const styles = StyleSheet.create({
   headerTitle: { color: "#fff", fontSize: 16, fontWeight: "800" },
   headerSub: { color: "rgba(255,255,255,0.5)", fontSize: 12, marginTop: 4 },
   list: { padding: 16, paddingBottom: 40 },
+  searchBox: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.08)",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+  },
+  searchInput: { flex: 1, color: colors.text, fontSize: 13, paddingVertical: 9 },
   countRow: {
     flexDirection: "row",
     alignItems: "center",

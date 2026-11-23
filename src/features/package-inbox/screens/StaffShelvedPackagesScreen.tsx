@@ -6,6 +6,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -22,13 +23,14 @@ import { getSocieties, type HubPackage } from "@/shared/services/packageApi";
 import { tokenStorage } from "@/shared/services/tokenStorage";
 import { colors } from "@/shared/theme/colors";
 import { formatUnitLabel } from "@/shared/utils/formatUnitLabel";
+import { clearStaffPackagesCache } from "@/features/package-inbox/services/staffPackageCache";
+import { invalidateDispatchedPackagesCache } from "@/features/package-handover/services/handoverPackageCache";
 
 export function StaffShelvedPackagesScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const [session, setSession] = useState<StaffSessionState | null>(null);
   const [societyName, setSocietyName] = useState("Society");
-  const [dispatchedIds, setDispatchedIds] = useState<Set<string>>(new Set());
 
   useFocusEffect(
     useCallback(() => {
@@ -75,11 +77,13 @@ export function StaffShelvedPackagesScreen() {
       username={session.username}
       topInset={insets.top}
       sideInset={Math.max(insets.left, insets.right, 0)}
-      dispatchedIds={dispatchedIds}
-      onDispatched={(pkg) => {
-        setDispatchedIds((prev) => new Set([...prev, pkg.id]));
-      }}
       onSignOut={async () => {
+        for (const cachedSocietyId of new Set(session.societyIds ?? [societyId])) {
+          if (cachedSocietyId) {
+            clearStaffPackagesCache(cachedSocietyId);
+            invalidateDispatchedPackagesCache(cachedSocietyId);
+          }
+        }
         await clearStaffSession();
         await tokenStorage.removeToken();
         resetToRoot(navigation, "Launch");
@@ -94,8 +98,6 @@ function StaffShelvedBody({
   username,
   topInset,
   sideInset,
-  dispatchedIds,
-  onDispatched,
   onSignOut,
 }: {
   societyId: string;
@@ -103,13 +105,10 @@ function StaffShelvedBody({
   username: string;
   topInset: number;
   sideInset: number;
-  dispatchedIds: Set<string>;
-  onDispatched: (pkg: HubPackage) => void;
   onSignOut: () => Promise<void>;
 }) {
   const {
     hubPackages,
-    loadingPackages,
     packageLoadError,
     loadingId,
     errors,
@@ -117,16 +116,23 @@ function StaffShelvedBody({
     reload,
   } = useStaffReceive(societyId);
   const [refreshing, setRefreshing] = useState(false);
+  const [search, setSearch] = useState("");
 
   const pending = hubPackages.filter(
     (pkg) =>
-      !dispatchedIds.has(pkg.id) &&
       (pkg.status ? pkg.status === "Shelved" : Boolean(pkg.shelfCode)),
   );
+  const normalizedSearch = search.trim().toLocaleLowerCase();
+  const filteredPending = normalizedSearch
+    ? pending.filter((pkg) =>
+        [pkg.recipientName, pkg.tower, pkg.towerWing, pkg.flat, pkg.flatNumber]
+          .some((value) => value?.toLocaleLowerCase().includes(normalizedSearch)),
+      )
+    : pending;
 
   async function handleDispatch(pkg: HubPackage) {
     const ok = await dispatch(pkg);
-    if (ok) onDispatched(pkg);
+    if (ok) return;
   }
 
   return (
@@ -151,11 +157,27 @@ function StaffShelvedBody({
           />
         }
       >
-        <Text style={styles.countLabel}>On shelf ({pending.length})</Text>
+        <Text style={styles.countLabel}>On shelf ({filteredPending.length})</Text>
+        <View style={styles.searchBox}>
+          <Ionicons name="search" size={17} color="#9CA3AF" />
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search name, tower or flat"
+            placeholderTextColor="#9CA3AF"
+            autoCapitalize="none"
+            returnKeyType="search"
+            style={styles.searchInput}
+            accessibilityLabel="Search shelved packages by name, tower or flat"
+          />
+          {search.length > 0 ? (
+            <Pressable onPress={() => setSearch("")} hitSlop={8} accessibilityLabel="Clear search">
+              <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+            </Pressable>
+          ) : null}
+        </View>
 
-        {loadingPackages && pending.length === 0 ? (
-          <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} />
-        ) : packageLoadError ? (
+        {packageLoadError && pending.length === 0 ? (
           <View style={styles.errorBox}>
             <Text style={styles.errorText}>{packageLoadError}</Text>
             <Pressable onPress={reload}>
@@ -171,7 +193,12 @@ function StaffShelvedBody({
             </Text>
           </View>
         ) : (
-          pending.map((pkg) => {
+          filteredPending.length === 0 ? (
+            <View style={styles.empty}>
+              <Text style={styles.emptyTitle}>No matching packages</Text>
+              <Text style={styles.emptyBody}>Try another name, tower or flat.</Text>
+            </View>
+          ) : filteredPending.map((pkg) => {
             const error = errors[pkg.id];
             const isLoading = loadingId === pkg.id;
             const counter = pkg.preferredDeliveryMethod === "CounterPickup";
@@ -272,6 +299,19 @@ const styles = StyleSheet.create({
   headerTitle: { color: "#fff", fontSize: 16, fontWeight: "800" },
   headerSub: { color: "rgba(255,255,255,0.5)", fontSize: 12, marginTop: 4 },
   list: { padding: 16, paddingBottom: 40 },
+  searchBox: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.08)",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+  },
+  searchInput: { flex: 1, color: colors.text, fontSize: 13, paddingVertical: 9 },
   countLabel: {
     fontSize: 11,
     fontWeight: "800",

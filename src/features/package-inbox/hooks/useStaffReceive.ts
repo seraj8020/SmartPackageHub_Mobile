@@ -4,55 +4,80 @@ import {
   getSocietyPackages,
   type HubPackage,
 } from "@/shared/services/packageApi";
+import {
+  STAFF_PACKAGES_CACHE_TTL_MS,
+  getCachedStaffPackages,
+  isStaffPackagesCacheFresh,
+  setCachedStaffPackages,
+  subscribeToStaffPackages,
+  updateCachedStaffPackage,
+} from "@/features/package-inbox/services/staffPackageCache";
+import { upsertCachedDispatchedPackage } from "@/features/package-handover/services/handoverPackageCache";
 
 export function useStaffReceive(societyId: string) {
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [hubPackages, setHubPackages] = useState<HubPackage[]>([]);
+  const [hubPackages, setHubPackages] = useState<HubPackage[]>(
+    () => getCachedStaffPackages(societyId) ?? [],
+  );
   const [loadingPackages, setLoadingPackages] = useState(false);
   const [packageLoadError, setPackageLoadError] = useState<string | null>(null);
-  const [reloadPackages, setReloadPackages] = useState(0);
 
+  useEffect(() => subscribeToStaffPackages(societyId, setHubPackages), [societyId]);
+
+  const [reloadPackages, setReloadPackages] = useState(0);
   useEffect(() => {
     let mounted = true;
-
-    async function load(showSpinner: boolean) {
+    async function load(force: boolean, showSpinner: boolean) {
       if (!societyId) {
-        if (!mounted) return;
         setHubPackages([]);
         setPackageLoadError("Society session is missing. Sign in again.");
         setLoadingPackages(false);
         return;
       }
-      if (showSpinner) setLoadingPackages(true);
+
+      const cachedPackages = getCachedStaffPackages(societyId);
+      if (cachedPackages) setHubPackages(cachedPackages);
+      if (!force && isStaffPackagesCacheFresh(societyId)) {
+        setPackageLoadError(null);
+        setLoadingPackages(false);
+        return;
+      }
+
+      if (showSpinner && !cachedPackages) setLoadingPackages(true);
       setPackageLoadError(null);
       try {
         const data = await getSocietyPackages(societyId);
         if (!mounted) return;
+        setCachedStaffPackages(societyId, data);
         setHubPackages(data);
-      } catch (err: unknown) {
-        if (mounted) {
-          setPackageLoadError(err instanceof Error ? err.message : "Unable to load packages");
-        }
+      } catch (err) {
+        if (mounted && !cachedPackages) setPackageLoadError(err instanceof Error ? err.message : "Unable to load packages");
       } finally {
-        if (mounted && showSpinner) setLoadingPackages(false);
+        if (mounted) setLoadingPackages(false);
       }
     }
 
-    void load(true);
-    const timer = setInterval(() => {
-      void load(false);
-    }, 5000);
-
-    return () => {
-      mounted = false;
-      clearInterval(timer);
-    };
+    void load(reloadPackages > 0, true);
+    const timer = setInterval(() => void load(true, false), STAFF_PACKAGES_CACHE_TTL_MS);
+    return () => { mounted = false; clearInterval(timer); };
   }, [societyId, reloadPackages]);
 
-  const reload = useCallback(() => {
-    setReloadPackages((value) => value + 1);
-  }, []);
+  const reload = useCallback(() => setReloadPackages((value) => value + 1), []);
+
+  const markShelved = useCallback(
+    (pkg: HubPackage, shelfCode: string, isColdStorage: boolean) => {
+      const shelved: HubPackage = {
+        ...pkg,
+        status: "Shelved",
+        shelfCode,
+        isColdStorage,
+      };
+      updateCachedStaffPackage(societyId, shelved);
+      setHubPackages(getCachedStaffPackages(societyId) ?? []);
+    },
+    [societyId],
+  );
 
   async function dispatch(pkg: HubPackage): Promise<boolean> {
     setLoadingId(pkg.id);
@@ -67,6 +92,11 @@ export function useStaffReceive(societyId: string) {
       if (!resp.success) {
         throw new Error(resp.message ?? "Package dispatch failed.");
       }
+      const dispatched: HubPackage = { ...pkg, status: "Dispatched", deliveredAt: undefined };
+      updateCachedStaffPackage(societyId, dispatched);
+      // Keep Handover list in sync — otherwise it can miss this package for up to the cache TTL.
+      upsertCachedDispatchedPackage(societyId, dispatched);
+      setHubPackages(getCachedStaffPackages(societyId) ?? []);
       return true;
     } catch (err) {
       setErrors((prev) => ({
@@ -88,5 +118,6 @@ export function useStaffReceive(societyId: string) {
     errors,
     dispatch,
     reload,
+    markShelved,
   };
 }
