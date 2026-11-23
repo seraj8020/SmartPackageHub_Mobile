@@ -23,6 +23,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getSocieties } from "@/shared/services/packageApi";
 import { SignOutButton } from "@/shared/ui/SignOutButton";
 import { colors } from "@/shared/theme/colors";
+import { clearStaffPackagesCache } from "@/features/package-inbox/services/staffPackageCache";
+import { invalidateDispatchedPackagesCache } from "@/features/package-handover/services/handoverPackageCache";
 
 const Tab = createBottomTabNavigator<StaffTabParamList>();
 
@@ -58,7 +60,14 @@ export function StaffTabNavigator() {
       });
     return () => { active = false; };
   }, [societyId]);
+
   async function signOut() {
+    for (const cachedSocietyId of new Set(session?.societyIds ?? [societyId])) {
+      if (cachedSocietyId) {
+        clearStaffPackagesCache(cachedSocietyId);
+        invalidateDispatchedPackagesCache(cachedSocietyId);
+      }
+    }
     await clearStaffSession();
     await tokenStorage.removeToken();
     resetToRoot(navigation, "Launch");
