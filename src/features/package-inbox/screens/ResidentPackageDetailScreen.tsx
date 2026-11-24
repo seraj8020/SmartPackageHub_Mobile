@@ -1,0 +1,143 @@
+import { useCallback, useEffect, useState } from "react";
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import type { ResidentStackParamList } from "@/app/navigation/types";
+import { getResidentSession } from "@/features/authentication/services/sessionStorage";
+import { damagePhotoRequestHeaders, getResidentPackageDetail, refreshDamagePhotoUrl, type ResidentPackageDetail } from "@/shared/services/packageApi";
+import { colors } from "@/shared/theme/colors";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+type Props = NativeStackScreenProps<ResidentStackParamList, "PackageDetail">;
+type Nav = NativeStackNavigationProp<ResidentStackParamList, "PackageDetail">;
+
+export function ResidentPackageDetailScreen({ route }: Props) {
+  const navigation = useNavigation<Nav>();
+  const insets = useSafeAreaInsets();
+  const { pkg } = route.params;
+  const [detail, setDetail] = useState<ResidentPackageDetail | null>(null);
+  const [photoUrl, setPhotoUrl] = useState<string | undefined>();
+  const [loading, setLoading] = useState(true);
+  const [photoFailed, setPhotoFailed] = useState(false);
+  const [photoHeaders, setPhotoHeaders] = useState<Record<string, string> | undefined>();
+  const [retrying, setRetrying] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    void getResidentSession().then(async (session) => {
+      if (!session) {
+        if (active) {
+          setDetail(pkg as ResidentPackageDetail);
+          setPhotoUrl(pkg.damagePhotoUrl);
+          setPhotoHeaders(pkg.damagePhotoUrl ? await damagePhotoRequestHeaders(pkg.damagePhotoUrl) : undefined);
+          setPhotoFailed(Boolean(pkg.isDamaged && !pkg.damagePhotoUrl));
+          setLoading(false);
+        }
+        return;
+      }
+      try {
+        const result = await getResidentPackageDetail(session.residentId, pkg.id);
+        if (!active) return;
+        setDetail(result);
+        setPhotoUrl(result.damagePhotoUrl);
+        setPhotoHeaders(result.damagePhotoUrl ? await damagePhotoRequestHeaders(result.damagePhotoUrl) : undefined);
+        setPhotoFailed(Boolean(result.isDamaged && !result.damagePhotoUrl));
+      } catch {
+        if (active) {
+          setDetail(pkg as ResidentPackageDetail);
+          setPhotoUrl(pkg.damagePhotoUrl);
+          setPhotoHeaders(pkg.damagePhotoUrl ? await damagePhotoRequestHeaders(pkg.damagePhotoUrl) : undefined);
+          setPhotoFailed(Boolean(pkg.isDamaged && !pkg.damagePhotoUrl));
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    });
+    return () => { active = false; };
+  }, [pkg]);
+
+  const retryPhoto = useCallback(async () => {
+    setRetrying(true);
+    try {
+      const session = await getResidentSession();
+      if (!session) throw new Error("Please sign in again to load the damage photo.");
+      const freshUrl = await refreshDamagePhotoUrl(session.residentId, pkg.id);
+      setPhotoUrl(freshUrl);
+      setPhotoHeaders(await damagePhotoRequestHeaders(freshUrl));
+      setPhotoFailed(false);
+    } catch {
+      setPhotoFailed(true);
+    } finally {
+      setRetrying(false);
+    }
+  }, [pkg.id]);
+
+  const current = detail ?? pkg;
+  return (
+    <View style={styles.root}>
+    <ScrollView contentContainerStyle={[styles.page, { paddingBottom: Math.max(insets.bottom, 16) + 18 }]}>
+      <View style={styles.hero}>
+        <Text style={styles.tracking}>{pkg.pkgNumber || pkg.tracking}</Text>
+        <Text style={styles.meta}>{pkg.courier} · {pkg.tracking}</Text>
+      </View>
+      <View style={styles.statusRow}>
+        <Text style={styles.status}>{current.status ?? "Shelved"}{current.shelfCode ? ` · ${current.shelfCode}` : ""}</Text>
+        {current.isDamaged ? <Text style={styles.damaged}>Damaged on arrival</Text> : null}
+      </View>
+      {loading ? <ActivityIndicator color={colors.primary} style={styles.loading} /> : null}
+      {!loading && current.isDamaged ? (
+        <View style={styles.damageSection}>
+          <Text style={styles.sectionTitle}>Hub intake note</Text>
+          <View style={styles.card}>
+            {photoUrl && !photoFailed ? (
+              <Image
+                source={{ uri: photoUrl, headers: photoHeaders }}
+                style={styles.photo}
+                resizeMode="cover"
+                onError={() => setPhotoFailed(true)}
+              />
+            ) : (
+              <View style={[styles.photo, styles.placeholder]}>
+                <Ionicons name="image-outline" size={27} color="#8A97A6" />
+                <Text style={styles.placeholderText}>Photo unavailable</Text>
+                <Pressable onPress={() => void retryPhoto()} disabled={retrying} style={styles.retry}>
+                  <Text style={styles.retryText}>{retrying ? "Retrying…" : "Retry photo"}</Text>
+                </Pressable>
+              </View>
+            )}
+            {current.damageNote ? <Text style={styles.note}>{current.damageNote}</Text> : null}
+          </View>
+        </View>
+      ) : null}
+      <Pressable style={styles.deliveryButton} onPress={() => navigation.navigate("DeliveryPreference", { pkg: current })}>
+        <Text style={styles.deliveryText}>Schedule door delivery</Text>
+      </Pressable>
+    </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.background },
+  page: { flexGrow: 1, backgroundColor: colors.background },
+  hero: { backgroundColor: colors.primary, paddingHorizontal: 20, paddingTop: 18, paddingBottom: 18 },
+  tracking: { color: "#fff", fontSize: 17, fontWeight: "800" },
+  meta: { color: "#C3D2E0", fontSize: 11, marginTop: 5 },
+  statusRow: { marginHorizontal: 16, marginTop: 14, paddingHorizontal: 12, paddingVertical: 11, borderRadius: 14, backgroundColor: "#fff", borderWidth: 1, borderColor: colors.border, flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
+  status: { color: "#1551BA", backgroundColor: "#EFF6FF", borderColor: "#BFDBFE", overflow: "hidden", borderWidth: 1, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 4, fontSize: 10, fontWeight: "700" },
+  damaged: { color: "#A65B00", backgroundColor: "#FFFBEB", borderColor: "#FDE68A", overflow: "hidden", borderWidth: 1, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 4, fontSize: 10, fontWeight: "700" },
+  card: { marginHorizontal: 16, marginTop: 10, padding: 14, backgroundColor: "#fff", borderColor: colors.border, borderWidth: 1, borderRadius: 14 },
+  loading: { marginTop: 20 },
+  damageSection: { marginTop: 16 },
+  sectionTitle: { marginHorizontal: 16, marginBottom: 1, color: colors.primary, fontSize: 11, fontWeight: "800", letterSpacing: 1.2, textTransform: "uppercase" },
+  photo: { width: 88, height: 88, borderRadius: 10, backgroundColor: "#E7EBEF", marginBottom: 8 },
+  placeholder: { alignItems: "center", justifyContent: "center", padding: 6 },
+  placeholderText: { color: "#697586", fontSize: 9, textAlign: "center", marginTop: 2 },
+  retry: { paddingVertical: 6, paddingHorizontal: 8 },
+  retryText: { color: colors.primary, fontSize: 11, fontWeight: "700" },
+  note: { color: colors.textMuted, fontSize: 11, lineHeight: 16, marginTop: 6, fontFamily: "monospace" },
+  deliveryButton: { marginHorizontal: 16, marginTop: 10, minHeight: 46, alignItems: "center", justifyContent: "center", borderRadius: 13, borderColor: colors.border, borderWidth: 1, backgroundColor: "#fff" },
+  deliveryText: { color: colors.primary, fontWeight: "800", fontSize: 14 },
+});

@@ -1,4 +1,4 @@
-import { API, apiFetch, authHeaders } from "@/shared/services/apiClient";
+import { API, apiFetch, authHeaders, authTokenHeader } from "@/shared/services/apiClient";
 
 export interface Society {
   id: string;
@@ -43,6 +43,15 @@ export interface HubPackage {
   deliverySlotStatus?: string;
   deliverySlotLabel?: string;
   preferredDeliveryMethod?: "DoorDelivery" | "CounterPickup" | string;
+  isDamaged?: boolean;
+  damageNote?: string;
+  damagePhotoUrl?: string;
+}
+
+export interface ResidentPackageDetail extends HubPackage {
+  isDamaged: boolean;
+  damageNote?: string;
+  damagePhotoUrl?: string;
 }
 
 export interface HistoryItem {
@@ -88,11 +97,52 @@ export interface StartTowerRouteResponse {
 
 function textOf(row: Record<string, unknown>, ...keys: string[]): string {
   for (const key of keys) {
-    const value = row[key];
+    const value = row[key] ?? row[Object.keys(row).find((candidate) => candidate.toLowerCase() === key.toLowerCase()) ?? ""];
     if (typeof value === "string" && value.trim()) return value.trim();
     if (typeof value === "number") return String(value);
   }
   return "";
+}
+
+function objectOf(row: Record<string, unknown>, ...keys: string[]): Record<string, unknown> | undefined {
+  for (const key of keys) {
+    const candidateKey = Object.keys(row).find((candidate) => candidate.toLowerCase() === key.toLowerCase());
+    const value = candidateKey ? row[candidateKey] : undefined;
+    if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+      return value as Record<string, unknown>;
+    }
+  }
+  return undefined;
+}
+
+function absoluteApiUrl(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  if (/^https?:\/\//i.test(value)) return value;
+  try {
+    return new URL(value, `${API}/`).toString();
+  } catch {
+    return undefined;
+  }
+}
+
+function damageFields(row: Record<string, unknown>) {
+  const envelope = objectOf(row, "data", "result", "package") ?? row;
+  const hubIntake = objectOf(row, "hubIntakeNote", "HubIntakeNote", "intake", "packageIntake")
+    ?? objectOf(envelope, "hubIntakeNote", "HubIntakeNote", "intake", "packageIntake");
+  const isDamaged = envelope.isDamaged === true || envelope.IsDamaged === true ||
+    hubIntake?.isDamaged === true || hubIntake?.IsDamaged === true ||
+    row.isDamaged === true || row.IsDamaged === true;
+  // This is the API's canonical shape: hubIntakeNote.damageNote.
+  const damageNote = (hubIntake ? textOf(hubIntake,
+    "damageNote", "DamageNote", "staffDamageNote", "StaffDamageNote", "staffNote", "StaffNote",
+    "damageDescription", "DamageDescription") : "") ||
+    textOf(envelope, "damageNote", "DamageNote", "staffDamageNote", "StaffDamageNote", "staffNote", "StaffNote") || undefined;
+  const damagePhotoUrl = absoluteApiUrl((hubIntake ? textOf(hubIntake,
+    "damagePhotoUrl", "DamagePhotoUrl", "damagePhotoURL", "DamagePhotoURL",
+    "photoUrl", "PhotoUrl", "signedUrl", "SignedUrl", "url", "Url") : "") || textOf(envelope,
+    "damagePhotoUrl", "DamagePhotoUrl", "damagePhotoURL", "DamagePhotoURL",
+    "photoUrl", "PhotoUrl", "signedUrl", "SignedUrl", "url", "Url") || undefined);
+  return { isDamaged, damageNote, damagePhotoUrl };
 }
 
 export function toHubPackage(row: Record<string, unknown>): HubPackage {
@@ -105,6 +155,7 @@ export function toHubPackage(row: Record<string, unknown>): HubPackage {
     "—";
   const isCodRaw = row.isCod ?? row.IsCod;
   const codAmountRaw = row.codAmount ?? row.CodAmount;
+  const damage = damageFields(row);
   return {
     id: textOf(row, "id", "Id"),
     residentId: textOf(row, "residentId", "ResidentId") || undefined,
@@ -147,6 +198,7 @@ export function toHubPackage(row: Record<string, unknown>): HubPackage {
     deliverySlotLabel: textOf(row, "deliverySlotLabel", "DeliverySlotLabel") || undefined,
     preferredDeliveryMethod:
       textOf(row, "preferredDeliveryMethod", "PreferredDeliveryMethod") || undefined,
+    ...damage,
   };
 }
 
@@ -184,6 +236,53 @@ export async function getResidentPackages(residentId: string): Promise<HubPackag
   }
   const rows = (await response.json()) as Array<Record<string, unknown>>;
   return rows.map(toHubPackage);
+}
+
+/** Loads owner-scoped package detail, including hub damage information when present. */
+export async function getResidentPackageDetail(
+  residentId: string,
+  packageId: string,
+): Promise<ResidentPackageDetail> {
+  const endpoint = `${API}/residents/${encodeURIComponent(residentId)}/packages/${encodeURIComponent(packageId)}`;
+  const response = await apiFetch(
+    endpoint,
+    { headers: await authHeaders() },
+  );
+  const body = await response.json().catch(() => null) as Record<string, unknown> | null;
+  if (!response.ok) throw new Error(`Failed to load package detail (${response.status})`);
+  if (!body) throw new Error("Package detail response was empty or invalid JSON.");
+  const row = body;
+  const damage = damageFields(row);
+  const packageRow = objectOf(row, "package", "Package", "data", "Data", "result", "Result") ?? row;
+  return {
+    ...toHubPackage(packageRow),
+    ...damage,
+  };
+}
+
+/** Reissues the authorized damage photo URL without reloading package detail. */
+export async function refreshDamagePhotoUrl(residentId: string, packageId: string): Promise<string> {
+  const endpoint = `${API}/residents/${encodeURIComponent(residentId)}/packages/${encodeURIComponent(packageId)}/damage-photo-url`;
+  const response = await apiFetch(
+    endpoint,
+    { headers: await authHeaders() },
+  );
+  const body = await response.json().catch(() => null) as Record<string, unknown> | null;
+  if (!response.ok) throw new Error(`Failed to refresh damage photo (${response.status})`);
+  if (!body) throw new Error("Damage photo URL response was empty or invalid JSON.");
+  const url = absoluteApiUrl(textOf(body, "damagePhotoUrl", "DamagePhotoUrl", "url", "Url", "photoUrl", "PhotoUrl"));
+  if (!url) throw new Error("Damage photo URL was not returned.");
+  return url;
+}
+
+/** Adds bearer authorization only for the API's authenticated local photo proxy. */
+export async function damagePhotoRequestHeaders(photoUrl: string): Promise<Record<string, string> | undefined> {
+  try {
+    if (new URL(photoUrl).origin !== new URL(API).origin) return undefined;
+    return authTokenHeader();
+  } catch {
+    return undefined;
+  }
 }
 
 /** Returns packages that have been collected or delivered by a resident. */

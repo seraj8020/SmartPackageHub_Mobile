@@ -69,6 +69,7 @@ export function ResidentHomeScreen() {
   const [packages, setPackages] = useState<HubPackage[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [dismissedCodIds, setDismissedCodIds] = useState<Set<string>>(new Set());
 
   const inboxPackages = useMemo(
@@ -126,8 +127,9 @@ export function ResidentHomeScreen() {
         const match = societies.find((item) => item.id === stored.societyId);
         setSocietyName(match?.name ?? "");
         setPackages(pkgs);
-      } catch {
-        setPackages([]);
+        setLoadError(null);
+      } catch (cause) {
+        setLoadError(cause instanceof Error ? cause.message : "Unable to load packages. Try again.");
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -240,8 +242,21 @@ export function ResidentHomeScreen() {
           Only shelved packages appear here · tap a package to choose delivery
         </Text>
 
+        {!loading && loadError && inboxPackages.length > 0 ? (
+          <Pressable style={styles.loadError} onPress={() => void load(true)}>
+            <Text style={styles.loadErrorText}>Couldn’t refresh packages. Tap to retry.</Text>
+          </Pressable>
+        ) : null}
+
         {loading ? (
           <ActivityIndicator color={colors.primary} style={{ marginTop: 24 }} />
+        ) : loadError && inboxPackages.length === 0 ? (
+          <Pressable style={styles.loadErrorEmpty} onPress={() => void load(true)}>
+            <Ionicons name="cloud-offline-outline" size={23} color="#9CA3AF" />
+            <Text style={styles.emptyTitle}>Couldn’t load packages</Text>
+            <Text style={styles.emptyBody}>{loadError}</Text>
+            <Text style={styles.loadErrorAction}>Tap to try again</Text>
+          </Pressable>
         ) : inboxPackages.length === 0 ? (
           <View style={styles.empty}>
             <Ionicons name="cube-outline" size={22} color="#D1D5DB" />
@@ -259,7 +274,7 @@ export function ResidentHomeScreen() {
               <Pressable
                 key={pkg.id}
                 style={styles.packageCard}
-                onPress={() => navigation.navigate("DeliveryPreference", { pkg })}
+                onPress={() => navigation.navigate("PackageDetail", { pkg })}
               >
                 <View style={styles.packageTop}>
                   <Text style={styles.courier}>{pkg.courier ?? "Courier"}</Text>
@@ -407,6 +422,26 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { marginTop: 8, fontSize: 14, fontWeight: "600", color: "#4B5563" },
   emptyBody: { marginTop: 4, fontSize: 12, color: "#9CA3AF", textAlign: "center" },
+  loadError: {
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FECACA",
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginBottom: 10,
+  },
+  loadErrorText: { color: "#991B1B", fontSize: 12, fontWeight: "600", textAlign: "center" },
+  loadErrorEmpty: {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.05)",
+    paddingVertical: 24,
+    paddingHorizontal: 16,
+    alignItems: "center",
+  },
+  loadErrorAction: { color: colors.primary, fontSize: 12, fontWeight: "700", marginTop: 10 },
   packageCard: {
     backgroundColor: colors.surface,
     borderRadius: 12,
