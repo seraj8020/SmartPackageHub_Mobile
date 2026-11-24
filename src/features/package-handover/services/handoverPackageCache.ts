@@ -34,7 +34,11 @@ export function getCachedDispatchedPackages(societyId: string): HubPackage[] | u
 
 export function isDispatchedPackagesCacheFresh(societyId: string, now = Date.now()): boolean {
   const entry = cache.get(societyId);
-  return Boolean(entry && now - entry.updatedAt < DISPATCHED_PACKAGES_CACHE_TTL_MS);
+  if (!entry) return false;
+  // An empty list must not stay "fresh" — otherwise Hand stays blank after a
+  // later Route dispatch until the TTL expires.
+  if (entry.packages.length === 0) return false;
+  return now - entry.updatedAt < DISPATCHED_PACKAGES_CACHE_TTL_MS;
 }
 
 export function setCachedDispatchedPackages(societyId: string, packages: HubPackage[]): void {
@@ -64,6 +68,6 @@ export function removeCachedDispatchedPackage(societyId: string, packageId: stri
 }
 
 export function invalidateDispatchedPackagesCache(societyId: string): void {
+  // Drop freshness only — do not push [] to listeners (that blanked Handover).
   cache.delete(societyId);
-  notify(societyId, []);
 }

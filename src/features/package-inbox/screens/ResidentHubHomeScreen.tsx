@@ -9,7 +9,12 @@ import {
   clearResidentSession,
   getResidentSession,
 } from "@/features/authentication/services/sessionStorage";
-import { getResidentPackages, getSocieties, type HubPackage } from "@/shared/services/packageApi";
+import {
+  getResidentHistory,
+  getResidentPackages,
+  getSocieties,
+  type HubPackage,
+} from "@/shared/services/packageApi";
 import { tokenStorage } from "@/shared/services/tokenStorage";
 import { HubHomeLayout, HubTile, HubTileRow } from "@/shared/ui/hub/HubHomeLayout";
 import { hubColors } from "@/shared/ui/hub/hubTheme";
@@ -22,6 +27,7 @@ export function ResidentHubHomeScreen() {
   const [session, setSession] = useState<ResidentSessionState | null>(null);
   const [societyName, setSocietyName] = useState("");
   const [packages, setPackages] = useState<HubPackage[]>([]);
+  const [historyCount, setHistoryCount] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -56,9 +62,15 @@ export function ResidentHubHomeScreen() {
     useCallback(() => {
       if (!session?.residentId) return;
       let active = true;
-      void getResidentPackages(session.residentId)
-        .then((rows) => {
-          if (active) setPackages(rows);
+      // Inbox packages exclude Delivered — history count needs the dedicated endpoint.
+      void Promise.all([
+        getResidentPackages(session.residentId),
+        getResidentHistory(session.residentId).catch(() => []),
+      ])
+        .then(([rows, history]) => {
+          if (!active) return;
+          setPackages(rows);
+          setHistoryCount(history.length);
         })
         .catch(() => undefined);
       return () => {
@@ -124,6 +136,7 @@ export function ResidentHubHomeScreen() {
           title="History"
           subtitle="Past deliveries"
           icon="archive-outline"
+          count={historyCount}
           onPress={() => navigation.navigate("History")}
         />
       </HubTileRow>

@@ -16,7 +16,13 @@ import {
   subscribeToStaffPackages,
 } from "@/features/package-inbox/services/staffPackageCache";
 import { invalidateDispatchedPackagesCache } from "@/features/package-handover/services/handoverPackageCache";
-import { getSocieties, getSocietyPackages, type HubPackage } from "@/shared/services/packageApi";
+import {
+  getSocieties,
+  getSocietyDeliveredPackages,
+  getSocietyDispatchedPackages,
+  getSocietyPackages,
+  type HubPackage,
+} from "@/shared/services/packageApi";
 import { tokenStorage } from "@/shared/services/tokenStorage";
 import { HubHomeLayout, HubTile, HubTileRow } from "@/shared/ui/hub/HubHomeLayout";
 import { hubColors } from "@/shared/ui/hub/hubTheme";
@@ -27,11 +33,24 @@ function countByStatus(packages: HubPackage[], status: string) {
   return packages.filter((pkg) => (pkg.status ?? "") === status).length;
 }
 
+function isDeliveredToday(pkg: HubPackage, now = new Date()): boolean {
+  if (!pkg.deliveredAt) return false;
+  const at = new Date(pkg.deliveredAt);
+  if (Number.isNaN(at.getTime())) return false;
+  return (
+    at.getFullYear() === now.getFullYear() &&
+    at.getMonth() === now.getMonth() &&
+    at.getDate() === now.getDate()
+  );
+}
+
 export function StaffHomeScreen() {
   const navigation = useNavigation<Nav>();
   const [session, setSession] = useState<StaffSessionState | null>(null);
   const [societyName, setSocietyName] = useState("Your society");
   const [packages, setPackages] = useState<HubPackage[]>([]);
+  const [dispatchedCount, setDispatchedCount] = useState(0);
+  const [deliveredTodayCount, setDeliveredTodayCount] = useState(0);
 
   const societyId = session?.primarySocietyId ?? session?.societyIds?.[0] ?? "";
 
@@ -73,14 +92,36 @@ export function StaffHomeScreen() {
     useCallback(() => {
       if (!societyId) return;
       const cached = getCachedStaffPackages(societyId);
-      if (cached) setPackages(cached);
-      const unsubscribe = subscribeToStaffPackages(societyId, setPackages);
+      if (cached) {
+        setPackages(cached);
+        setDispatchedCount(countByStatus(cached, "Dispatched"));
+      }
+      const unsubscribe = subscribeToStaffPackages(societyId, (rows) => {
+        setPackages(rows);
+        setDispatchedCount(countByStatus(rows, "Dispatched"));
+      });
       let active = true;
-      void getSocietyPackages(societyId)
-        .then((rows) => {
+      // Society /packages used to omit Dispatched — still merge dedicated dispatched
+      // + delivered endpoints so home tiles stay correct even before API deploy.
+      void Promise.all([
+        getSocietyPackages(societyId),
+        getSocietyDispatchedPackages(societyId).catch(() => [] as HubPackage[]),
+        getSocietyDeliveredPackages(societyId).catch(() => [] as HubPackage[]),
+      ])
+        .then(([activeRows, dispatchedRows, deliveredRows]) => {
           if (!active) return;
-          setCachedStaffPackages(societyId, rows);
-          setPackages(rows);
+          const byId = new Map<string, HubPackage>();
+          for (const row of activeRows) byId.set(row.id, row);
+          for (const row of dispatchedRows) {
+            byId.set(row.id, { ...row, status: row.status || "Dispatched" });
+          }
+          const merged = [...byId.values()];
+          setCachedStaffPackages(societyId, merged);
+          setPackages(merged);
+          setDispatchedCount(
+            merged.filter((pkg) => (pkg.status ?? "") === "Dispatched" && !pkg.deliveredAt).length,
+          );
+          setDeliveredTodayCount(deliveredRows.filter((pkg) => isDeliveredToday(pkg)).length);
         })
         .catch(() => undefined);
       return () => {
@@ -92,8 +133,6 @@ export function StaffHomeScreen() {
 
   const receivedCount = useMemo(() => countByStatus(packages, "Received"), [packages]);
   const shelvedCount = useMemo(() => countByStatus(packages, "Shelved"), [packages]);
-  const dispatchedCount = useMemo(() => countByStatus(packages, "Dispatched"), [packages]);
-  const deliveredCount = useMemo(() => countByStatus(packages, "Delivered"), [packages]);
 
   async function signOut() {
     for (const id of new Set(session?.societyIds ?? [societyId])) {
@@ -164,7 +203,7 @@ export function StaffHomeScreen() {
         title="Delivered today"
         subtitle="Completed handovers"
         icon="checkmark-done-outline"
-        count={deliveredCount}
+        count={deliveredTodayCount}
         onPress={() => navigation.navigate("Done")}
       />
 
