@@ -4,6 +4,7 @@ import NetInfo from "@react-native-community/netinfo";
 import {
   confirmIntake,
   uploadDamagePhoto,
+  uploadParcelPhoto,
   type ConfirmIntakeResult,
   type ResidentMatch,
 } from "@/features/package-intake/services/intakeApi";
@@ -59,6 +60,7 @@ export function usePackageIntake(options: {
   const [busy, setBusy] = useState(false);
   const [receipt, setReceipt] = useState<ConfirmIntakeResult | null>(null);
   const [damageState, setDamageState] = useState<string | null>(null);
+  const [photoState, setPhotoState] = useState<string | null>(null);
 
   useEffect(() => {
     alive.current = true;
@@ -100,26 +102,53 @@ export function usePackageIntake(options: {
     scanner.applyResidentFields(resident);
   }
 
-  async function markDamaged() {
+  async function captureStill(options?: { withBase64?: boolean }) {
     const camera = scanner.cameraRef.current;
     if (!camera || !scanner.cameraOn) {
-      scanner.setError("Open the camera, then tap damage to snap the box.");
-      return;
+      throw new Error("Open the camera first, then capture the parcel photo.");
     }
+    // skipProcessing:false so quality compression applies (otherwise full-res phone JPEGs exceed API limits).
+    const photo = await camera.takePictureAsync({
+      quality: 0.35,
+      base64: options?.withBase64 === true,
+      skipProcessing: false,
+      shutterSound: false,
+    });
+    if (!photo?.uri) {
+      throw new Error("Could not capture parcel photo.");
+    }
+    return photo;
+  }
+
+  /** Traizr-style arrival photo — always stored for the resident package record. */
+  async function ensureArrivalPhoto(): Promise<{ clientPhotoId: string; uri: string }> {
+    if (scanner.photoIdRef.current && scanner.photoUriRef.current) {
+      return { clientPhotoId: scanner.photoIdRef.current, uri: scanner.photoUriRef.current };
+    }
+    const photo = await captureStill();
+    const clientPhotoId = createClientId();
+    scanner.photoIdRef.current = clientPhotoId;
+    scanner.photoUriRef.current = photo.uri;
+    setPhotoState("Arrival photo captured");
+    return { clientPhotoId, uri: photo.uri };
+  }
+
+  async function markDamaged() {
     try {
-      // skipProcessing:false so quality compression applies (otherwise full-res phone JPEGs exceed API limits).
-      const photo = await camera.takePictureAsync({
-        quality: 0.35,
-        base64: true,
-        skipProcessing: false,
-        shutterSound: false,
-      });
-      if (!photo?.base64) {
+      const photo = await captureStill({ withBase64: true });
+      if (!photo.base64) {
         scanner.setError("Could not capture damage photo.");
         return;
       }
       setDamagePhoto(`data:image/jpeg;base64,${photo.base64}`);
       setDamaged(true);
+      // Reuse the same frame as arrival photo when none exists yet.
+      if (!scanner.photoUriRef.current) {
+        const clientPhotoId = createClientId();
+        scanner.photoIdRef.current = clientPhotoId;
+        scanner.photoUriRef.current = photo.uri;
+        setPhotoState("Arrival photo captured (from damage snap)");
+      }
     } catch (err) {
       scanner.setError(err instanceof Error ? err.message : "Damage snap failed");
     }
@@ -145,45 +174,66 @@ export function usePackageIntake(options: {
       return;
     }
 
-    const payload = {
-      awb: scanner.awb.trim(),
-      barcode: scanner.barcodeRef.current || undefined,
-      courier,
-      recipientName: scanner.name.trim() || undefined,
-      tower: scanner.tower.trim() || undefined,
-      flatNumber: scanner.flat.trim() || undefined,
-      residentId: matching.selected?.id,
-      societyId: societyId || undefined,
-      staffUserId,
-      staffName: trimmedName,
-      rawOcrText: scanner.rawTextRef.current || undefined,
-      ocrElapsedMs: scanner.elapsedMs ?? undefined,
-      clientRequestId: requestId.current,
-      clientPhotoId: scanner.photoIdRef.current ?? undefined,
-      isDamaged: damaged,
-      damageNote: damageNote.trim() || undefined,
-      matchStatus: matching.selected ? matching.matchMode : "missing",
-      category: category.trim() || undefined,
-      isColdStorage,
-      weight: parsePositiveNumber(scanner.weight) ?? DEFAULT_INTAKE_WEIGHT_KG,
-      length: parsePositiveNumber(scanner.length) ?? DEFAULT_INTAKE_LENGTH_CM,
-      width: parsePositiveNumber(scanner.width) ?? DEFAULT_INTAKE_WIDTH_CM,
-      height: parsePositiveNumber(scanner.height) ?? DEFAULT_INTAKE_HEIGHT_CM,
-      isCod,
-      codAmount: isCod ? parsePositiveNumber(codAmount) : undefined,
-    };
-
     try {
+      // Traizr-style: always capture an arrival photo for the resident package record.
+      let arrival: { clientPhotoId: string; uri: string };
+      try {
+        arrival = await ensureArrivalPhoto();
+        if (alive.current) setPhotoState("Arrival photo captured");
+      } catch (photoErr) {
+        scanner.setError(
+          photoErr instanceof Error
+            ? photoErr.message
+            : "Arrival photo is required. Open the camera and try again.",
+        );
+        setBusy(false);
+        return;
+      }
+
+      const payload = {
+        awb: scanner.awb.trim(),
+        barcode: scanner.barcodeRef.current || undefined,
+        courier,
+        recipientName: scanner.name.trim() || undefined,
+        tower: scanner.tower.trim() || undefined,
+        flatNumber: scanner.flat.trim() || undefined,
+        residentId: matching.selected?.id,
+        societyId: societyId || undefined,
+        staffUserId,
+        staffName: trimmedName,
+        rawOcrText: scanner.rawTextRef.current || undefined,
+        ocrElapsedMs: scanner.elapsedMs ?? undefined,
+        clientRequestId: requestId.current,
+        clientPhotoId: arrival.clientPhotoId,
+        localArrivalPhotoUri: arrival.uri,
+        isDamaged: damaged,
+        damageNote: damageNote.trim() || undefined,
+        matchStatus: matching.selected ? matching.matchMode : "missing",
+        category: category.trim() || undefined,
+        isColdStorage,
+        weight: parsePositiveNumber(scanner.weight) ?? DEFAULT_INTAKE_WEIGHT_KG,
+        length: parsePositiveNumber(scanner.length) ?? DEFAULT_INTAKE_LENGTH_CM,
+        width: parsePositiveNumber(scanner.width) ?? DEFAULT_INTAKE_WIDTH_CM,
+        height: parsePositiveNumber(scanner.height) ?? DEFAULT_INTAKE_HEIGHT_CM,
+        isCod,
+        codAmount: isCod ? parsePositiveNumber(codAmount) : undefined,
+      };
+
       const net = await NetInfo.fetch();
       if (!net.isConnected) {
+        // Defer upload until queue flush; ConfirmIntake links via clientPhotoId once photo is stored.
         const queued = await enqueueIntake(payload);
         scanner.stopCamera();
         setReceipt(queued);
+        if (alive.current) setPhotoState("Arrival photo queued offline");
         void flushIntakeQueue();
         return;
       }
 
       try {
+        setPhotoState("Uploading arrival photo…");
+        await uploadParcelPhoto(arrival.clientPhotoId, arrival.uri);
+        if (alive.current) setPhotoState("Arrival photo saved");
         const result = await confirmIntake(payload);
         scanner.stopCamera();
         setReceipt(result);
@@ -242,6 +292,7 @@ export function usePackageIntake(options: {
     setBusy(false);
     setReceipt(null);
     setDamageState(null);
+    setPhotoState(null);
   }
 
   const canConfirm =
@@ -286,6 +337,8 @@ export function usePackageIntake(options: {
     busy,
     receipt,
     damageState,
+    // Prefer upload/status from intake over scanner OCR caption.
+    photoState: photoState ?? scanner.photoState,
     canConfirm,
     markDamaged,
     confirm,

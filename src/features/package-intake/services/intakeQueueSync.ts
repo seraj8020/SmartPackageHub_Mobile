@@ -2,6 +2,7 @@ import NetInfo from "@react-native-community/netinfo";
 import {
   batchConfirmIntake,
   confirmIntake,
+  uploadParcelPhoto,
   type ConfirmIntakePayload,
 } from "@/features/package-intake/services/intakeApi";
 import {
@@ -14,6 +15,12 @@ import {
   prepareIntakeQueueForFlush,
   purgeSyncedOlderThan,
 } from "@/features/package-intake/services/intakeQueueDb";
+
+/** Upload deferred arrival photo before confirm so ConfirmIntake can link PackageImage. */
+async function ensureQueuedArrivalUploaded(payload: ConfirmIntakePayload): Promise<void> {
+  if (!payload.clientPhotoId || !payload.localArrivalPhotoUri) return;
+  await uploadParcelPhoto(payload.clientPhotoId, payload.localArrivalPhotoUri);
+}
 
 type SyncListener = (pendingCount: number) => void;
 
@@ -79,12 +86,31 @@ export async function flushIntakeQueue(options?: { force?: boolean }): Promise<{
     }));
 
     try {
-      const batch = await batchConfirmIntake(payloads.map((item) => item.payload));
+      const uploadFailedIds = new Set<string>();
+      for (const item of payloads) {
+        try {
+          await ensureQueuedArrivalUploaded(item.payload);
+        } catch (err) {
+          uploadFailedIds.add(item.id);
+          const message = err instanceof Error ? err.message : "Arrival photo upload failed";
+          await markIntakeFailed(item.id, item.attempts + 1, message);
+        }
+      }
+
+      const toBatch = payloads.filter((item) => !uploadFailedIds.has(item.id));
+      if (toBatch.length === 0) {
+        return {
+          pending: await countPendingIntake(),
+          lastError: await getLatestIntakeQueueError(),
+        };
+      }
+
+      const batch = await batchConfirmIntake(toBatch.map((item) => item.payload));
       const byClientId = new Map(
         batch.results.map((result) => [result.clientRequestId ?? "", result]),
       );
 
-      for (const item of payloads) {
+      for (const item of toBatch) {
         const result =
           byClientId.get(item.payload.clientRequestId) ??
           batch.results.find(
@@ -104,6 +130,7 @@ export async function flushIntakeQueue(options?: { force?: boolean }): Promise<{
       // Batch endpoint unavailable / network flake → fall back to single confirms.
       for (const item of payloads) {
         try {
+          await ensureQueuedArrivalUploaded(item.payload);
           await confirmIntake(item.payload);
           await markIntakeSynced(item.id);
         } catch (err) {

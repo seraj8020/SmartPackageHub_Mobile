@@ -34,6 +34,8 @@ export interface ConfirmIntakePayload {
   ocrElapsedMs?: number;
   clientRequestId: string;
   clientPhotoId?: string;
+  /** Local file URI for deferred arrival upload (offline queue only — never sent to API). */
+  localArrivalPhotoUri?: string;
   isDamaged: boolean;
   damageNote?: string;
   matchStatus: string;
@@ -45,6 +47,12 @@ export interface ConfirmIntakePayload {
   height?: number;
   isCod?: boolean;
   codAmount?: number;
+}
+
+/** Strip client-only fields before POST /intake/confirm or batch. */
+export function toApiConfirmPayload(payload: ConfirmIntakePayload): ConfirmIntakePayload {
+  const { localArrivalPhotoUri: _local, ...apiPayload } = payload;
+  return apiPayload;
 }
 
 export interface ConfirmIntakeResult {
@@ -186,7 +194,7 @@ export async function confirmIntake(
   const response = await apiFetch(`${API}/intake/confirm`, {
     method: "POST",
     headers: await authHeaders(),
-    body: JSON.stringify(payload),
+    body: JSON.stringify(toApiConfirmPayload(payload)),
   });
   if (!response.ok) await readError(response, `Intake failed (${response.status})`);
   return normalizeIntakeResult(await response.json());
@@ -215,7 +223,7 @@ export async function batchConfirmIntake(
   const response = await apiFetch(`${API}/intake/batch-intake`, {
     method: "POST",
     headers: await authHeaders(),
-    body: JSON.stringify({ items }),
+    body: JSON.stringify({ items: items.map(toApiConfirmPayload) }),
   });
   if (!response.ok) await readError(response, `Batch intake failed (${response.status})`);
   const body = (await response.json()) as Record<string, unknown>;
