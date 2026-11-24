@@ -2,6 +2,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import type { ResidentStackParamList } from "@/app/navigation/types";
 import { ResidentHubHomeScreen } from "@/features/package-inbox/screens/ResidentHubHomeScreen";
 import { ResidentHomeScreen } from "@/features/package-inbox/screens/ResidentHomeScreen";
+import { ResidentPackageDetailScreen } from "@/features/package-inbox/screens/ResidentPackageDetailScreen";
 import { ResidentHistoryScreen } from "@/features/package-inbox/screens/ResidentHistoryScreen";
 import { ResidentProfileScreen } from "@/features/package-inbox/screens/ResidentProfileScreen";
 import { DoorDeliverySlotScreen } from "@/features/delivery-slots/screens/DoorDeliverySlotScreen";
@@ -37,6 +38,7 @@ export function ResidentStackNavigator() {
         component={ResidentHomeScreen}
         options={{ ...detailScreenOptions, title: "My packages" }}
       />
+      <Stack.Screen name="PackageDetail" component={ResidentPackageDetailScreen} options={{ ...detailScreenOptions, title: "Package detail" }} />
       <Stack.Screen name="History" component={ResidentHistoryScreen} options={{ ...detailScreenOptions, title: "History" }} />
       <Stack.Screen
         name="Vacation"
@@ -47,7 +49,7 @@ export function ResidentStackNavigator() {
       <Stack.Screen
         name="DeliveryPreference"
         component={DoorDeliverySlotScreen}
-        options={{ ...detailScreenOptions, headerShown: false }}
+        options={{ ...detailScreenOptions, title: "Delivery preference", headerBackTitle: "My packages" }}
       />
     </Stack.Navigator>
   );

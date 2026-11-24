@@ -16,6 +16,7 @@ export type ResidentStackParamList = {
   Vacation: undefined;
   Profile: undefined;
   DeliveryPreference: { pkg: HubPackage };
+  PackageDetail: { pkg: HubPackage };
 };
 
 /** @deprecated Use ResidentStackParamList — kept temporarily for any lingering imports. */

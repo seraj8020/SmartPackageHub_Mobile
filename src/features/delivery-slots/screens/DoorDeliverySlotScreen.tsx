@@ -64,7 +64,7 @@ export function DoorDeliverySlotScreen({ navigation, route }: Props) {
 
   if (sessionError) {
     return (
-      <View style={[styles.root, { paddingTop: insets.top }]}>
+      <View style={styles.root}>
         <Text style={styles.errorText}>{sessionError}</Text>
         <Pressable style={styles.backLink} onPress={() => navigation.goBack()}>
           <Text style={styles.backLinkText}>Back to inbox</Text>
@@ -75,7 +75,7 @@ export function DoorDeliverySlotScreen({ navigation, route }: Props) {
 
   if (!residentId || !societyId) {
     return (
-      <View style={[styles.root, styles.centered, { paddingTop: insets.top }]}>
+      <View style={[styles.root, styles.centered]}>
         <ActivityIndicator color={colors.primary} />
       </View>
     );
@@ -86,9 +86,7 @@ export function DoorDeliverySlotScreen({ navigation, route }: Props) {
       pkg={pkg}
       residentId={residentId}
       societyId={societyId}
-      topInset={insets.top}
       bottomInset={insets.bottom}
-      onBack={() => navigation.goBack()}
       onBooked={() => navigation.goBack()}
     />
   );
@@ -98,17 +96,13 @@ function DoorDeliverySlotBody({
   pkg,
   residentId,
   societyId,
-  topInset,
   bottomInset,
-  onBack,
   onBooked,
 }: {
   pkg: Props["route"]["params"]["pkg"];
   residentId: string;
   societyId: string;
-  topInset: number;
   bottomInset: number;
-  onBack: () => void;
   onBooked: () => void;
 }) {
   const {
@@ -143,15 +137,7 @@ function DoorDeliverySlotBody({
   }
 
   return (
-    <View style={[styles.root, { paddingTop: topInset }]}>
-      <View style={styles.hero}>
-        <Pressable onPress={onBack} hitSlop={8} style={styles.backBtn}>
-          <Text style={styles.backBtnText}>← Back to inbox</Text>
-        </Pressable>
-        <Text style={styles.title}>Delivery preference</Text>
-        <Text style={styles.subtitle}>{subtitle}</Text>
-      </View>
-
+    <View style={styles.root}>
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: Math.max(24, bottomInset + 16) }]}
         keyboardShouldPersistTaps="handled"
@@ -324,16 +310,6 @@ function packageTracking(pkg: Props["route"]["params"]["pkg"]) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#F7F8FA" },
   centered: { alignItems: "center", justifyContent: "center" },
-  hero: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    paddingTop: 12,
-  },
-  backBtn: { marginBottom: 10, alignSelf: "flex-start" },
-  backBtnText: { color: "rgba(255,255,255,0.7)", fontSize: 12, fontWeight: "600" },
-  title: { color: "#fff", fontSize: 18, fontWeight: "700" },
-  subtitle: { marginTop: 4, color: "rgba(255,255,255,0.55)", fontSize: 12 },
   content: { paddingHorizontal: 16, paddingTop: 16, gap: 12 },
   card: {
     backgroundColor: colors.surface,
