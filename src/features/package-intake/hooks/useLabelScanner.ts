@@ -73,6 +73,8 @@ export function useLabelScanner() {
   const barcodeRef = useRef("");
   const rawTextRef = useRef("");
   const photoIdRef = useRef<string | null>(null);
+  /** Local file URI for the arrival/parcel frame (uploaded on confirm). */
+  const photoUriRef = useRef<string | null>(null);
   const edited = useRef<EditedFlags>(emptyEdited());
   const ocrBusy = useRef(false);
   const ocrSession = useRef(0);
@@ -255,7 +257,8 @@ export function useLabelScanner() {
         return;
       }
       photoIdRef.current = createClientId();
-      setPhotoState("Label frame captured");
+      photoUriRef.current = photo.uri;
+      setPhotoState("Arrival frame captured");
       setStatus("Running on-device OCR (first run may download the model)…");
       // Emulator + Play Services often need >60s on first ML Kit Text Recognition use.
       const ocr = await withTimeout(
@@ -408,6 +411,7 @@ export function useLabelScanner() {
     barcodeRef.current = "";
     rawTextRef.current = "";
     photoIdRef.current = null;
+    photoUriRef.current = null;
     edited.current = emptyEdited();
     lastScanAt.current = 0;
     setCourier("");
@@ -446,6 +450,7 @@ export function useLabelScanner() {
     barcodeRef,
     rawTextRef,
     photoIdRef,
+    photoUriRef,
     cameraOn,
     cameraReady,
     cameraEpoch,

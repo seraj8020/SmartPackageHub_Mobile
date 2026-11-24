@@ -46,12 +46,15 @@ export interface HubPackage {
   isDamaged?: boolean;
   damageNote?: string;
   damagePhotoUrl?: string;
+  /** Hub arrival / parcel photo captured at intake (all packages when available). */
+  arrivalPhotoUrl?: string;
 }
 
 export interface ResidentPackageDetail extends HubPackage {
   isDamaged: boolean;
   damageNote?: string;
   damagePhotoUrl?: string;
+  arrivalPhotoUrl?: string;
 }
 
 export interface HistoryItem {
@@ -129,6 +132,8 @@ function damageFields(row: Record<string, unknown>) {
   const envelope = objectOf(row, "data", "result", "package") ?? row;
   const hubIntake = objectOf(row, "hubIntakeNote", "HubIntakeNote", "intake", "packageIntake")
     ?? objectOf(envelope, "hubIntakeNote", "HubIntakeNote", "intake", "packageIntake");
+  const hubArrival = objectOf(row, "hubArrivalPhoto", "HubArrivalPhoto")
+    ?? objectOf(envelope, "hubArrivalPhoto", "HubArrivalPhoto");
   const isDamaged = envelope.isDamaged === true || envelope.IsDamaged === true ||
     hubIntake?.isDamaged === true || hubIntake?.IsDamaged === true ||
     row.isDamaged === true || row.IsDamaged === true;
@@ -142,7 +147,11 @@ function damageFields(row: Record<string, unknown>) {
     "photoUrl", "PhotoUrl", "signedUrl", "SignedUrl", "url", "Url") : "") || textOf(envelope,
     "damagePhotoUrl", "DamagePhotoUrl", "damagePhotoURL", "DamagePhotoURL",
     "photoUrl", "PhotoUrl", "signedUrl", "SignedUrl", "url", "Url") || undefined);
-  return { isDamaged, damageNote, damagePhotoUrl };
+  const arrivalPhotoUrl = absoluteApiUrl((hubArrival ? textOf(hubArrival,
+    "arrivalPhotoUrl", "ArrivalPhotoUrl", "photoUrl", "PhotoUrl",
+    "signedUrl", "SignedUrl", "url", "Url") : "") || textOf(envelope,
+    "arrivalPhotoUrl", "ArrivalPhotoUrl") || undefined);
+  return { isDamaged, damageNote, damagePhotoUrl, arrivalPhotoUrl };
 }
 
 export function toHubPackage(row: Record<string, unknown>): HubPackage {
@@ -275,6 +284,21 @@ export async function refreshDamagePhotoUrl(residentId: string, packageId: strin
   return url;
 }
 
+/** Reissues the authorized arrival photo URL without reloading package detail. */
+export async function refreshArrivalPhotoUrl(residentId: string, packageId: string): Promise<string> {
+  const endpoint = `${API}/residents/${encodeURIComponent(residentId)}/packages/${encodeURIComponent(packageId)}/arrival-photo-url`;
+  const response = await apiFetch(
+    endpoint,
+    { headers: await authHeaders() },
+  );
+  const body = await response.json().catch(() => null) as Record<string, unknown> | null;
+  if (!response.ok) throw new Error(`Failed to refresh arrival photo (${response.status})`);
+  if (!body) throw new Error("Arrival photo URL response was empty or invalid JSON.");
+  const url = absoluteApiUrl(textOf(body, "arrivalPhotoUrl", "ArrivalPhotoUrl", "url", "Url", "photoUrl", "PhotoUrl"));
+  if (!url) throw new Error("Arrival photo URL was not returned.");
+  return url;
+}
+
 /** Adds bearer authorization only for the API's authenticated local photo proxy. */
 export async function damagePhotoRequestHeaders(photoUrl: string): Promise<Record<string, string> | undefined> {
   try {
@@ -284,6 +308,9 @@ export async function damagePhotoRequestHeaders(photoUrl: string): Promise<Recor
     return undefined;
   }
 }
+
+/** Same auth header helper for arrival photo proxy URLs. */
+export const arrivalPhotoRequestHeaders = damagePhotoRequestHeaders;
 
 /** Returns packages that have been collected or delivered by a resident. */
 export async function getResidentHistory(residentId: string): Promise<HistoryItem[]> {
