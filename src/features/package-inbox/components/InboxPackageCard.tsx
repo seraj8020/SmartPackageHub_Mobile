@@ -55,10 +55,12 @@ export function InboxPackageCard({ pkg, residentId, onPress }: Props) {
   useEffect(() => {
     let active = true;
     setPhotoFailed(false);
-    // Prefer signed URL from detail-shaped payloads; otherwise use authenticated proxy.
+    // Only fetch when we know a photo exists — avoids N×404s that slowed the inbox.
     const url =
       pkg.arrivalPhotoUrl ||
-      (residentId && pkg.id ? residentArrivalPhotoProxyUrl(residentId, pkg.id) : undefined);
+      (pkg.hasArrivalPhoto && residentId && pkg.id
+        ? residentArrivalPhotoProxyUrl(residentId, pkg.id)
+        : undefined);
     if (!url) {
       setPhotoUrl(undefined);
       setPhotoHeaders(undefined);
@@ -73,7 +75,7 @@ export function InboxPackageCard({ pkg, residentId, onPress }: Props) {
     return () => {
       active = false;
     };
-  }, [pkg.arrivalPhotoUrl, pkg.id, residentId]);
+  }, [pkg.arrivalPhotoUrl, pkg.hasArrivalPhoto, pkg.id, residentId]);
 
   const title =
     pkg.pkgNumber || pkg.tracking || pkg.trackingNumber || pkg.recipientName || "Package";
