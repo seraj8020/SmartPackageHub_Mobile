@@ -3,7 +3,6 @@ import type { CameraView, BarcodeScanningResult } from "expo-camera";
 import { useIsFocused } from "@react-navigation/native";
 import type { ResidentMatch } from "@/features/package-intake/services/intakeApi";
 import { recognizeLabelFromUri } from "@/features/package-intake/services/labelOcr";
-import { createClientId } from "@/shared/utils/createClientId";
 
 type EditedFlags = {
   courier: boolean;
@@ -67,8 +66,16 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promi
   });
 }
 
-export function useLabelScanner() {
-  const isFocused = useIsFocused();
+export function useLabelScanner(options?: {
+  /**
+   * Focus of the whole Scan flow (parent stack screen).
+   * Prefer this over nested camera/details focus so OCR is not cancelled
+   * when staff continues to package details.
+   */
+  flowFocused?: boolean;
+}) {
+  const routeFocused = useIsFocused();
+  const isFocused = options?.flowFocused ?? routeFocused;
   const cameraRef = useRef<CameraView | null>(null);
   const barcodeRef = useRef("");
   const rawTextRef = useRef("");
@@ -109,7 +116,9 @@ export function useLabelScanner() {
 
   const wasFocused = useRef(isFocused);
 
-  // Leaving Scan (Shelf/Map/Hand/…) turns the camera off so Open camera shows on return.
+  // Leaving the Scan flow (Home / Shelf / …) turns the camera off.
+  // Must use parent flow focus — not nested camera/details — or OCR L×W×H is cancelled
+  // when staff taps Continue to package details.
   useEffect(() => {
     if (isFocused) return;
     ocrSession.current += 1;
@@ -122,7 +131,7 @@ export function useLabelScanner() {
     setStatus("Open the camera to scan a shipping label");
   }, [isFocused]);
 
-  // Remount only when returning to Scan with camera already on (Android barcode rebind).
+  // Remount only when returning to the Scan flow with camera already on (Android barcode rebind).
   // Do NOT remount on cameraOn toggle — startCamera already bumps once; double remount
   // blacks out the preview on some Samsung devices.
   useEffect(() => {
@@ -285,9 +294,9 @@ export function useLabelScanner() {
         bumpCamera();
         return;
       }
-      photoIdRef.current = createClientId();
-      photoUriRef.current = photo.uri;
-      setPhotoState("Arrival frame captured");
+      // OCR needs a sharp frame (high quality). Do NOT treat it as the arrival/parcel
+      // photo — that full-res still often exceeds the 1.5 MB upload limit. Staff taps
+      // Snap parcel (or confirm captures a compressed still) for the resident photo.
       setStatus("Running on-device OCR (first run may download the model)…");
       // Emulator + Play Services often need >60s on first ML Kit Text Recognition use.
       const ocr = await withTimeout(

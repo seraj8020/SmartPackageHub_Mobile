@@ -32,14 +32,16 @@ export function usePackageIntake(options: {
   staffUserId: string;
   /** Logged-in staff username / display name used to prefill the staff name field. */
   defaultStaffName?: string;
+  /** Parent Scan screen focus — keeps OCR alive across camera → details navigation. */
+  flowFocused?: boolean;
 }) {
-  const { societyId, staffUserId, defaultStaffName } = options;
+  const { societyId, staffUserId, defaultStaffName, flowFocused } = options;
   const alive = useRef(true);
   const manualPick = useRef(false);
   const requestId = useRef(createClientId());
   const loginName = (defaultStaffName ?? "").trim();
 
-  const scanner = useLabelScanner();
+  const scanner = useLabelScanner({ flowFocused });
   const matching = useResidentMatching({
     alive,
     manualPick,
@@ -154,7 +156,9 @@ export function usePackageIntake(options: {
 
   /** Traizr-style arrival photo — always stored for the resident package record. */
   async function ensureArrivalPhoto(): Promise<{ clientPhotoId: string; uri: string }> {
-    if (scanner.photoIdRef.current && scanner.photoUriRef.current) {
+    // Only reuse an explicit Snap parcel / damage frame (compressed). OCR re-read
+    // frames are intentionally not stored in photoUriRef (they blow the 1.5 MB cap).
+    if (scanner.photoIdRef.current && scanner.photoUriRef.current && parcelPhotoReady) {
       return { clientPhotoId: scanner.photoIdRef.current, uri: scanner.photoUriRef.current };
     }
     const photo = await captureStill();
@@ -410,7 +414,7 @@ export function usePackageIntake(options: {
     // Prefer upload/status from intake over scanner OCR caption.
     photoState: photoState ?? scanner.photoState,
     canConfirm,
-    parcelPhotoReady: parcelPhotoReady || Boolean(scanner.photoUriRef.current),
+    parcelPhotoReady,
     snapParcelPhoto,
     markDamaged,
     confirm,

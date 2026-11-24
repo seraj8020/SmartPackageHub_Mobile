@@ -14,10 +14,6 @@ import type { ResidentStackParamList } from "@/app/navigation/types";
 import { useDoorDeliveryBooking } from "@/features/delivery-slots/hooks/useDoorDeliveryBooking";
 import type { PreferredDeliveryMethod } from "@/features/delivery-slots/models/deliverySlot.types";
 import { getResidentSession } from "@/features/authentication/services/sessionStorage";
-import {
-  shelfCollectLabel,
-  shelfLocationDetail,
-} from "@/features/package-inbox/utils/shelfLocationLabel";
 import { colors } from "@/shared/theme/colors";
 
 type Props = NativeStackScreenProps<ResidentStackParamList, "DeliveryPreference">;
@@ -125,12 +121,6 @@ function DoorDeliverySlotBody({
     submitBooking,
   } = useDoorDeliveryBooking({ pkg, residentId, societyId });
 
-  const subtitle = [packageTracking(selectedPackage), selectedPackage.courier, selectedPackage.flat]
-    .filter(Boolean)
-    .join(" · ");
-  const collect = shelfCollectLabel(selectedPackage);
-  const shelfDetail = shelfLocationDetail(selectedPackage);
-
   async function handleSave() {
     const ok = await submitBooking();
     if (ok) onBooked();
@@ -145,12 +135,6 @@ function DoorDeliverySlotBody({
         <View style={styles.card}>
           <Text style={styles.courier}>{selectedPackage.courier ?? "Courier"}</Text>
           <Text style={styles.tracking}>{packageTracking(selectedPackage)}</Text>
-          {collect ? (
-            <View style={styles.shelfBlock}>
-              <Text style={styles.shelfCollect}>{collect}</Text>
-              {shelfDetail ? <Text style={styles.shelfDetail}>{shelfDetail}</Text> : null}
-            </View>
-          ) : null}
           {selectedPackage.preferredDeliveryMethod ? (
             <Text style={styles.currentPref}>
               Current preference:{" "}
@@ -321,26 +305,6 @@ const styles = StyleSheet.create({
   },
   courier: { fontSize: 12, fontWeight: "700", color: colors.primary },
   tracking: { fontSize: 12, color: "#9CA3AF" },
-  shelfBlock: {
-    marginTop: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-    backgroundColor: "#F0F7FF",
-    borderWidth: 1,
-    borderColor: "#D6E6F5",
-  },
-  shelfCollect: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: colors.primary,
-  },
-  shelfDetail: {
-    marginTop: 2,
-    fontSize: 10,
-    fontWeight: "600",
-    color: "#4B5563",
-  },
   currentPref: {
     marginTop: 4,
     borderRadius: 8,
