@@ -345,6 +345,25 @@ export async function uploadParcelPhoto(
   }>;
 }
 
+/** Cheap re-link after confirm — no image bytes (avoids a second base64 upload). */
+export async function linkParcelPhoto(
+  clientPhotoId: string,
+  intakeId?: string,
+  packageId?: string,
+): Promise<{ clientPhotoId: string; linked: boolean }> {
+  const response = await apiFetch(`${API}/intake/photos/link`, {
+    method: "POST",
+    headers: await authHeaders(),
+    body: JSON.stringify({
+      clientPhotoId,
+      intakeId: intakeId || undefined,
+      packageId: packageId || undefined,
+    }),
+  });
+  if (!response.ok) await readError(response, `Parcel photo link failed (${response.status})`);
+  return response.json() as Promise<{ clientPhotoId: string; linked: boolean }>;
+}
+
 function normalizeIntakeResult(body: Record<string, unknown>): ConfirmIntakeResult {
   const text = (...keys: string[]) => {
     for (const key of keys) {

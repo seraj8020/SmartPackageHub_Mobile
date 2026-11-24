@@ -3,6 +3,7 @@ import * as SecureStore from "expo-secure-store";
 import NetInfo from "@react-native-community/netinfo";
 import {
   confirmIntake,
+  linkParcelPhoto,
   uploadDamagePhoto,
   uploadParcelPhoto,
   type ConfirmIntakeResult,
@@ -292,10 +293,10 @@ export function usePackageIntake(options: {
         await uploadParcelPhoto(arrival.clientPhotoId, arrival.uri);
         if (alive.current) setPhotoState("Arrival photo saved");
         const result = await confirmIntake(payload);
-        // Confirm writes the intake↔photo link; re-upload links PackageImage if the first link missed.
-        if (!result.photoStored && arrival.clientPhotoId && arrival.uri) {
+        // Confirm writes the intake↔photo link; cheap re-link if PackageImage row is still missing.
+        if (!result.photoStored && arrival.clientPhotoId) {
           try {
-            await uploadParcelPhoto(arrival.clientPhotoId, arrival.uri);
+            await linkParcelPhoto(arrival.clientPhotoId, result.intakeId, result.packageId);
             if (alive.current) setPhotoState("Arrival photo linked for resident");
           } catch {
             if (alive.current) {
