@@ -48,6 +48,8 @@ export interface HubPackage {
   damagePhotoUrl?: string;
   /** Hub arrival / parcel photo captured at intake (all packages when available). */
   arrivalPhotoUrl?: string;
+  /** True when PackageImage exists — open package detail to view the photo. */
+  hasArrivalPhoto?: boolean;
 }
 
 export interface ResidentPackageDetail extends HubPackage {
@@ -207,6 +209,10 @@ export function toHubPackage(row: Record<string, unknown>): HubPackage {
     deliverySlotLabel: textOf(row, "deliverySlotLabel", "DeliverySlotLabel") || undefined,
     preferredDeliveryMethod:
       textOf(row, "preferredDeliveryMethod", "PreferredDeliveryMethod") || undefined,
+    hasArrivalPhoto:
+      row.hasArrivalPhoto === true ||
+      row.HasArrivalPhoto === true ||
+      Boolean(damage.arrivalPhotoUrl),
     ...damage,
   };
 }
@@ -311,6 +317,11 @@ export async function damagePhotoRequestHeaders(photoUrl: string): Promise<Recor
 
 /** Same auth header helper for arrival photo proxy URLs. */
 export const arrivalPhotoRequestHeaders = damagePhotoRequestHeaders;
+
+/** Authenticated proxy URL for the hub arrival photo (inbox thumbnails + detail). */
+export function residentArrivalPhotoProxyUrl(residentId: string, packageId: string): string {
+  return `${API}/residents/${encodeURIComponent(residentId)}/packages/${encodeURIComponent(packageId)}/arrival-photo`;
+}
 
 /** Returns packages that have been collected or delivered by a resident. */
 export async function getResidentHistory(residentId: string): Promise<HistoryItem[]> {
