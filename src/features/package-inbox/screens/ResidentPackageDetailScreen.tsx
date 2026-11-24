@@ -154,7 +154,8 @@ export function ResidentPackageDetailScreen({ route }: Props) {
   }, [pkg.id]);
 
   const current = detail ?? pkg;
-  const showArrival = Boolean(arrivalUrl) || arrivalFailed;
+  const showArrival =
+    Boolean(arrivalUrl) || arrivalFailed || Boolean(current.hasArrivalPhoto);
   const showDamage = Boolean(current.isDamaged);
 
   return (
@@ -275,7 +276,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     textTransform: "uppercase",
   },
-  photo: { width: 88, height: 88, borderRadius: 10, backgroundColor: "#E7EBEF", marginBottom: 8 },
+  photo: { width: "100%", height: 220, borderRadius: 10, backgroundColor: "#E7EBEF", marginBottom: 8 },
   placeholder: { alignItems: "center", justifyContent: "center", padding: 6 },
   placeholderText: { color: "#697586", fontSize: 9, textAlign: "center", marginTop: 2 },
   retry: { paddingVertical: 6, paddingHorizontal: 8 },

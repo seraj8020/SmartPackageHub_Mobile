@@ -1,4 +1,5 @@
-import { API, apiFetch, authHeaders, authTokenHeader } from "@/shared/services/apiClient";
+import * as FileSystem from "expo-file-system/legacy";
+import { API, apiFetch, authHeaders } from "@/shared/services/apiClient";
 
 const OTHER_ONLY = ["Other"] as const;
 
@@ -323,17 +324,18 @@ export async function uploadParcelPhoto(
   clientPhotoId: string,
   uri: string,
 ): Promise<{ clientPhotoId: string; storageKey: string; linked: boolean }> {
-  const form = new FormData();
-  form.append("clientPhotoId", clientPhotoId);
-  form.append("file", {
-    uri,
-    name: "parcel.jpg",
-    type: "image/jpeg",
-  } as unknown as Blob);
-  const response = await apiFetch(`${API}/intake/photos`, {
+  // Same proven path as damage photos — JSON base64 (no FormData / Blob / multipart Content-Type).
+  const imageBase64 = await FileSystem.readAsStringAsync(uri, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+  const response = await apiFetch(`${API}/intake/photos/base64`, {
     method: "POST",
-    headers: await authTokenHeader(),
-    body: form,
+    headers: await authHeaders(),
+    body: JSON.stringify({
+      clientPhotoId,
+      imageBase64,
+      contentType: "image/jpeg",
+    }),
   });
   if (!response.ok) await readError(response, `Parcel photo failed (${response.status})`);
   return response.json() as Promise<{

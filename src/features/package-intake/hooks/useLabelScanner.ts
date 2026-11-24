@@ -84,8 +84,11 @@ export function useLabelScanner() {
   // Match web: camera stays off until staff taps Open camera.
   const [cameraOn, setCameraOn] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
+  const cameraReadyRef = useRef(false);
   const [cameraEpoch, setCameraEpoch] = useState(0);
   const [scanningEnabled, setScanningEnabled] = useState(false);
+  /** Next barcode scan should overwrite AWB (after Clear AWB / Scan barcode again). */
+  const forceAwbFromScan = useRef(false);
   const [reading, setReading] = useState(false);
   const [status, setStatus] = useState("Open the camera to scan a shipping label");
   const [confidence, setConfidence] = useState<number | null>(null);
@@ -112,6 +115,7 @@ export function useLabelScanner() {
     ocrSession.current += 1;
     ocrBusy.current = false;
     setReading(false);
+    cameraReadyRef.current = false;
     setCameraOn(false);
     setCameraReady(false);
     setScanningEnabled(false);
@@ -125,6 +129,7 @@ export function useLabelScanner() {
     const gainedFocus = isFocused && !wasFocused.current;
     wasFocused.current = isFocused;
     if (!gainedFocus || !cameraOn) return;
+    cameraReadyRef.current = false;
     setCameraReady(false);
     setCameraEpoch((value) => value + 1);
   }, [isFocused, cameraOn]);
@@ -134,8 +139,11 @@ export function useLabelScanner() {
     setCourier(value);
   }, []);
   const setAwbEdited = useCallback((value: string) => {
-    edited.current.awb = true;
-    setAwb(value.toUpperCase());
+    const next = value.toUpperCase();
+    // Empty field = staff wants a fresh barcode fill — do not treat as a locked edit.
+    edited.current.awb = next.trim().length > 0;
+    if (!next.trim()) forceAwbFromScan.current = true;
+    setAwb(next);
   }, []);
   const setNameEdited = useCallback((value: string) => {
     edited.current.name = true;
@@ -200,8 +208,29 @@ export function useLabelScanner() {
   }, []);
 
   function bumpCamera() {
+    cameraReadyRef.current = false;
     setCameraReady(false);
     setCameraEpoch((value) => value + 1);
+  }
+
+  function markCameraReady() {
+    cameraReadyRef.current = true;
+    setCameraReady(true);
+  }
+
+  async function waitForCameraReady(ms = 5000): Promise<boolean> {
+    const start = Date.now();
+    while (Date.now() - start < ms) {
+      if (cameraReadyRef.current && cameraRef.current) return true;
+      await new Promise((resolve) => setTimeout(resolve, 80));
+    }
+    return Boolean(cameraReadyRef.current && cameraRef.current);
+  }
+
+  /** Remount preview after a still capture so barcode + live view recover. */
+  async function recoverAfterStill() {
+    bumpCamera();
+    await waitForCameraReady(5000);
   }
 
   function cancelOcr(message?: string) {
@@ -353,14 +382,17 @@ export function useLabelScanner() {
     if (data.length < 4) return;
     lastScanAt.current = now;
     barcodeRef.current = data;
-    if (!edited.current.awb) {
+    // Allow overwrite when staff cleared AWB or tapped Scan barcode again.
+    if (!edited.current.awb || forceAwbFromScan.current) {
       setAwb(data.toUpperCase());
+      edited.current.awb = false;
+      forceAwbFromScan.current = false;
     }
     // Lock barcode only — do not auto-capture / OCR. takePictureAsync was
     // freezing the live preview on device; staff taps Re-read label for OCR.
     setScanningEnabled(false);
     setError(null);
-    setStatus("Barcode locked · tap Re-read label (OCR) or fill fields");
+    setStatus("Barcode locked · tap Scan barcode again to replace AWB, or Re-read label");
   }
 
   function rereadLabel() {
@@ -379,24 +411,33 @@ export function useLabelScanner() {
   }
 
   function resumeScanning() {
+    // Clear stuck OCR / still so "Reading…" cannot block the next barcode.
+    cancelOcr();
+    forceAwbFromScan.current = true;
+    edited.current.awb = false;
     setError(null);
     setScanningEnabled(true);
-    setStatus("Point at the tracking barcode");
+    setStatus("Point at the tracking barcode · next scan fills AWB");
+    // Remount recovers Android barcode listener after a lock; ready-gate avoids black preview.
     bumpCamera();
   }
 
   function stopCamera() {
     // Drop any in-flight OCR so "Reading…" cannot block the next package.
     cancelOcr();
+    cameraReadyRef.current = false;
     setCameraOn(false);
     setCameraReady(false);
     setScanningEnabled(false);
+    setStatus("Camera stopped · Open camera to scan again");
   }
 
   function startCamera() {
     cancelOcr();
+    forceAwbFromScan.current = false;
     setCameraOn(true);
     setScanningEnabled(true);
+    setError(null);
     setStatus("Point at the tracking barcode");
     bumpCamera();
   }
@@ -414,6 +455,7 @@ export function useLabelScanner() {
     photoUriRef.current = null;
     edited.current = emptyEdited();
     lastScanAt.current = 0;
+    forceAwbFromScan.current = false;
     setCourier("");
     setAwb("");
     setName("");
@@ -437,6 +479,7 @@ export function useLabelScanner() {
       return;
     }
 
+    cameraReadyRef.current = false;
     setCameraOn(false);
     setCameraReady(false);
     setScanningEnabled(false);
@@ -484,7 +527,9 @@ export function useLabelScanner() {
     applyResidentFields,
     hydrateEmptyFieldsFromResident,
     onBarcodeScanned,
-    onCameraReady: () => setCameraReady(true),
+    onCameraReady: markCameraReady,
+    waitForCameraReady,
+    recoverAfterStill,
     rereadLabel,
     resumeScanning,
     stopCamera,

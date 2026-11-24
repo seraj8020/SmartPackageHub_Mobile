@@ -188,9 +188,14 @@ function StaffScanBody({
         </View>
 
         <QuickIntakePanel
+          cameraOn={intake.cameraOn}
+          parcelPhotoReady={intake.parcelPhotoReady}
           damaged={intake.damaged}
           damageNote={intake.damageNote}
           staffName={intake.staffName}
+          onSnapParcel={() => {
+            void intake.snapParcelPhoto();
+          }}
           onMarkDamaged={() => {
             void intake.markDamaged();
           }}

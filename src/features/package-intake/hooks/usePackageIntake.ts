@@ -61,6 +61,7 @@ export function usePackageIntake(options: {
   const [receipt, setReceipt] = useState<ConfirmIntakeResult | null>(null);
   const [damageState, setDamageState] = useState<string | null>(null);
   const [photoState, setPhotoState] = useState<string | null>(null);
+  const [parcelPhotoReady, setParcelPhotoReady] = useState(false);
 
   useEffect(() => {
     alive.current = true;
@@ -102,22 +103,52 @@ export function usePackageIntake(options: {
     scanner.applyResidentFields(resident);
   }
 
-  async function captureStill(options?: { withBase64?: boolean }) {
-    const camera = scanner.cameraRef.current;
-    if (!camera || !scanner.cameraOn) {
-      throw new Error("Open the camera first, then capture the parcel photo.");
-    }
-    // skipProcessing:false so quality compression applies (otherwise full-res phone JPEGs exceed API limits).
-    const photo = await camera.takePictureAsync({
-      quality: 0.35,
-      base64: options?.withBase64 === true,
-      skipProcessing: false,
-      shutterSound: false,
+  function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(message)), ms);
+      promise.then(
+        (value) => {
+          clearTimeout(timer);
+          resolve(value);
+        },
+        (err: unknown) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+      );
     });
-    if (!photo?.uri) {
-      throw new Error("Could not capture parcel photo.");
+  }
+
+  async function captureStill(options?: { withBase64?: boolean }) {
+    if (!scanner.cameraOn) {
+      throw new Error("Open the camera first, then snap the parcel photo.");
     }
-    return photo;
+    const ready = await scanner.waitForCameraReady(5000);
+    const camera = scanner.cameraRef.current;
+    if (!ready || !camera) {
+      await scanner.recoverAfterStill();
+      throw new Error("Camera is not ready. Open camera, wait for the preview, then snap again.");
+    }
+    try {
+      // skipProcessing:false so quality compression applies (otherwise full-res phone JPEGs exceed API limits).
+      const photo = await withTimeout(
+        camera.takePictureAsync({
+          quality: 0.35,
+          base64: options?.withBase64 === true,
+          skipProcessing: false,
+          shutterSound: false,
+        }),
+        12000,
+        "Photo capture timed out. Tap Open camera / Scan barcode again, then retry the snap.",
+      );
+      if (!photo?.uri) {
+        throw new Error("Could not capture parcel photo.");
+      }
+      return photo;
+    } finally {
+      // Still capture freezes live preview on many Android devices — remount recovers it.
+      await scanner.recoverAfterStill();
+    }
   }
 
   /** Traizr-style arrival photo — always stored for the resident package record. */
@@ -129,27 +160,53 @@ export function usePackageIntake(options: {
     const clientPhotoId = createClientId();
     scanner.photoIdRef.current = clientPhotoId;
     scanner.photoUriRef.current = photo.uri;
+    setParcelPhotoReady(true);
     setPhotoState("Arrival photo captured");
     return { clientPhotoId, uri: photo.uri };
   }
 
+  /** Explicit snap for a normal (undamaged) parcel — stores under arrival/. */
+  async function snapParcelPhoto() {
+    try {
+      scanner.setError(null);
+      setPhotoState("Capturing parcel photo…");
+      const photo = await captureStill();
+      const clientPhotoId = createClientId();
+      scanner.photoIdRef.current = clientPhotoId;
+      scanner.photoUriRef.current = photo.uri;
+      if (alive.current) {
+        setParcelPhotoReady(true);
+        setPhotoState("Parcel photo captured · will upload on confirm");
+      }
+    } catch (err) {
+      if (alive.current) setPhotoState(null);
+      scanner.setError(err instanceof Error ? err.message : "Parcel snap failed");
+    }
+  }
+
   async function markDamaged() {
     try {
+      scanner.setError(null);
+      setDamageState("Capturing damage photo…");
       const photo = await captureStill({ withBase64: true });
       if (!photo.base64) {
         scanner.setError("Could not capture damage photo.");
+        setDamageState(null);
         return;
       }
       setDamagePhoto(`data:image/jpeg;base64,${photo.base64}`);
       setDamaged(true);
+      setDamageState("Damage photo captured");
       // Reuse the same frame as arrival photo when none exists yet.
       if (!scanner.photoUriRef.current) {
         const clientPhotoId = createClientId();
         scanner.photoIdRef.current = clientPhotoId;
         scanner.photoUriRef.current = photo.uri;
+        setParcelPhotoReady(true);
         setPhotoState("Arrival photo captured (from damage snap)");
       }
     } catch (err) {
+      setDamageState(null);
       scanner.setError(err instanceof Error ? err.message : "Damage snap failed");
     }
   }
@@ -235,6 +292,17 @@ export function usePackageIntake(options: {
         await uploadParcelPhoto(arrival.clientPhotoId, arrival.uri);
         if (alive.current) setPhotoState("Arrival photo saved");
         const result = await confirmIntake(payload);
+        // Confirm writes the intake↔photo link; re-upload links PackageImage if the first link missed.
+        if (!result.photoStored && arrival.clientPhotoId && arrival.uri) {
+          try {
+            await uploadParcelPhoto(arrival.clientPhotoId, arrival.uri);
+            if (alive.current) setPhotoState("Arrival photo linked for resident");
+          } catch {
+            if (alive.current) {
+              setPhotoState("Arrival photo saved but not linked — resident may not see it yet");
+            }
+          }
+        }
         scanner.stopCamera();
         setReceipt(result);
         if (damagePhoto) {
@@ -293,6 +361,7 @@ export function usePackageIntake(options: {
     setReceipt(null);
     setDamageState(null);
     setPhotoState(null);
+    setParcelPhotoReady(false);
   }
 
   const canConfirm =
@@ -340,6 +409,8 @@ export function usePackageIntake(options: {
     // Prefer upload/status from intake over scanner OCR caption.
     photoState: photoState ?? scanner.photoState,
     canConfirm,
+    parcelPhotoReady: parcelPhotoReady || Boolean(scanner.photoUriRef.current),
+    snapParcelPhoto,
     markDamaged,
     confirm,
     reset,

@@ -17,17 +17,13 @@ import type { ResidentStackParamList } from "@/app/navigation/types";
 import type { ResidentSessionState } from "@/features/authentication/models/auth.types";
 import { getResidentSession } from "@/features/authentication/services/sessionStorage";
 import { CodApprovalDialog } from "@/features/package-inbox/components/CodApprovalDialog";
-import {
-  shelfCollectLabel,
-  shelfLocationDetail,
-} from "@/features/package-inbox/utils/shelfLocationLabel";
+import { InboxPackageCard } from "@/features/package-inbox/components/InboxPackageCard";
 import {
   getResidentPackages,
   getSocieties,
   type HubPackage,
 } from "@/shared/services/packageApi";
 import { colors } from "@/shared/theme/colors";
-import { formatDisplayTimestamp } from "@/shared/utils/formatDisplayTimestamp";
 import {
   firstNameFrom,
   greetingForNow,
@@ -35,31 +31,6 @@ import {
 } from "@/shared/utils/greeting";
 
 type InboxNavigation = NativeStackNavigationProp<ResidentStackParamList, "Packages">;
-
-function preferenceChip(pkg: HubPackage): { text: string; styleKey: "violet" | "green" | "amber" } | null {
-  if (pkg.preferredDeliveryMethod === "CounterPickup") {
-    return { text: "Counter pickup", styleKey: "violet" };
-  }
-  if (pkg.preferredDeliveryMethod === "DoorDelivery" && pkg.deliverySlotLabel) {
-    return {
-      text:
-        pkg.deliverySlotStatus === "default"
-          ? `Door delivery · default ${pkg.deliverySlotLabel}`
-          : `Door delivery · ${pkg.deliverySlotLabel}`,
-      styleKey: pkg.deliverySlotStatus === "default" ? "amber" : "green",
-    };
-  }
-  if (pkg.deliverySlotLabel) {
-    return {
-      text:
-        pkg.deliverySlotStatus === "default"
-          ? `Default door ${pkg.deliverySlotLabel}`
-          : `Door ${pkg.deliverySlotLabel}`,
-      styleKey: pkg.deliverySlotStatus === "default" ? "amber" : "green",
-    };
-  }
-  return null;
-}
 
 export function ResidentHomeScreen() {
   const navigation = useNavigation<InboxNavigation>();
@@ -239,7 +210,7 @@ export function ResidentHomeScreen() {
       >
         <Text style={styles.sectionTitle}>Shelved at the Hub</Text>
         <Text style={styles.sectionHint}>
-          Only shelved packages appear here · tap a package to choose delivery
+          Arrival photo on each card · tap a package to book a delivery slot
         </Text>
 
         {!loading && loadError && inboxPackages.length > 0 ? (
@@ -266,66 +237,14 @@ export function ResidentHomeScreen() {
             </Text>
           </View>
         ) : (
-          inboxPackages.map((pkg) => {
-            const pref = preferenceChip(pkg);
-            const collect = shelfCollectLabel(pkg);
-            const shelfDetail = shelfLocationDetail(pkg);
-            return (
-              <Pressable
-                key={pkg.id}
-                style={styles.packageCard}
-                onPress={() => navigation.navigate("PackageDetail", { pkg })}
-              >
-                <View style={styles.packageTop}>
-                  <Text style={styles.courier}>{pkg.courier ?? "Courier"}</Text>
-                  <View style={styles.packageTopRight}>
-                    <Text style={styles.receivedAt}>
-                      {formatDisplayTimestamp(pkg.receivedAt)}
-                    </Text>
-                    <Ionicons name="chevron-forward" size={16} color="#D1D5DB" />
-                  </View>
-                </View>
-                <Text style={styles.tracking}>
-                  {pkg.tracking || pkg.trackingNumber || pkg.recipientName || "Package"}
-                </Text>
-                {(pkg.category || pkg.weight) ? (
-                  <Text style={styles.metaLine}>
-                    {pkg.category}
-                    {pkg.weight ? ` · ${pkg.weight}` : ""}
-                  </Text>
-                ) : null}
-                {collect ? (
-                  <View style={styles.shelfBlock}>
-                    <Text style={styles.shelfCollect}>{collect}</Text>
-                    {shelfDetail ? (
-                      <Text style={styles.shelfDetail}>{shelfDetail}</Text>
-                    ) : null}
-                  </View>
-                ) : null}
-                {pkg.isCod ? (
-                  <Text style={styles.codChip}>
-                    COD
-                    {pkg.codAmount != null ? ` ₹${pkg.codAmount}` : ""}
-                    {pkg.codApprovalStatus ? ` · ${pkg.codApprovalStatus}` : ""}
-                  </Text>
-                ) : null}
-                {pref ? (
-                  <Text
-                    style={[
-                      styles.prefChip,
-                      pref.styleKey === "violet"
-                        ? styles.prefViolet
-                        : pref.styleKey === "amber"
-                          ? styles.prefAmber
-                          : styles.prefGreen,
-                    ]}
-                  >
-                    {pref.text}
-                  </Text>
-                ) : null}
-              </Pressable>
-            );
-          })
+          inboxPackages.map((pkg) => (
+            <InboxPackageCard
+              key={pkg.id}
+              pkg={pkg}
+              residentId={session?.residentId ?? ""}
+              onPress={() => navigation.navigate("DeliveryPreference", { pkg })}
+            />
+          ))
         )}
       </ScrollView>
     </View>
@@ -442,81 +361,4 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   loadErrorAction: { color: colors.primary, fontSize: 12, fontWeight: "700", marginTop: 10 },
-  packageCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.05)",
-    padding: 14,
-    marginBottom: 8,
-  },
-  packageTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  packageTopRight: { flexDirection: "row", alignItems: "center", gap: 4 },
-  courier: { fontSize: 11, fontWeight: "700", color: colors.primary },
-  receivedAt: { fontSize: 10, color: "#9CA3AF", fontVariant: ["tabular-nums"] },
-  tracking: { fontSize: 12, color: "#9CA3AF" },
-  metaLine: { marginTop: 2, fontSize: 10, color: colors.textMuted },
-  shelfBlock: {
-    marginTop: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-    backgroundColor: "#F0F7FF",
-    borderWidth: 1,
-    borderColor: "#D6E6F5",
-  },
-  shelfCollect: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: colors.primary,
-  },
-  shelfDetail: {
-    marginTop: 2,
-    fontSize: 10,
-    fontWeight: "600",
-    color: "#4B5563",
-  },
-  codChip: {
-    marginTop: 8,
-    alignSelf: "flex-start",
-    fontSize: 10,
-    fontWeight: "800",
-    color: "#92400E",
-    backgroundColor: "#FFFBEB",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    overflow: "hidden",
-  },
-  prefChip: {
-    marginTop: 8,
-    alignSelf: "flex-start",
-    fontSize: 10,
-    fontWeight: "800",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    overflow: "hidden",
-    borderWidth: 1,
-  },
-  prefViolet: {
-    color: "#5B21B6",
-    backgroundColor: "#F5F3FF",
-    borderColor: "#EDE9FE",
-  },
-  prefGreen: {
-    color: "#065F46",
-    backgroundColor: "#ECFDF5",
-    borderColor: "#A7F3D0",
-  },
-  prefAmber: {
-    color: "#92400E",
-    backgroundColor: "#FFFBEB",
-    borderColor: "#FDE68A",
-  },
 });
