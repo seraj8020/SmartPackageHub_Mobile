@@ -323,6 +323,11 @@ export function residentArrivalPhotoProxyUrl(residentId: string, packageId: stri
   return `${API}/residents/${encodeURIComponent(residentId)}/packages/${encodeURIComponent(packageId)}/arrival-photo`;
 }
 
+/** Staff-authenticated arrival photo stream (Receive / Shelf / Handover thumbnails). */
+export function staffArrivalPhotoProxyUrl(packageId: string): string {
+  return `${API}/packages/${encodeURIComponent(packageId)}/arrival-photo`;
+}
+
 /** Returns packages that have been collected or delivered by a resident. */
 export async function getResidentHistory(residentId: string): Promise<HistoryItem[]> {
   const response = await apiFetch(

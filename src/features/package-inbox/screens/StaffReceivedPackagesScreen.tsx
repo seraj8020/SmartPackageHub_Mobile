@@ -25,15 +25,16 @@ import {
   suggestShelf,
   type ConfirmIntakeResult,
 } from "@/features/package-intake/services/intakeApi";
+import { ArrivalPhotoThumb } from "@/features/package-inbox/components/ArrivalPhotoThumb";
 import { useStaffReceive } from "@/features/package-inbox/hooks/useStaffReceive";
+import { clearStaffPackagesCache } from "@/features/package-inbox/services/staffPackageCache";
+import { invalidateDispatchedPackagesCache } from "@/features/package-handover/services/handoverPackageCache";
 import { useShelfPicker } from "@/features/shelf-management/hooks/useShelfPicker";
 import { rowFromShelfCode } from "@/features/shelf-management/utils/shelfCapacity";
 import { getSocieties, type HubPackage } from "@/shared/services/packageApi";
 import { tokenStorage } from "@/shared/services/tokenStorage";
 import { colors } from "@/shared/theme/colors";
 import { formatUnitLabel } from "@/shared/utils/formatUnitLabel";
-import { clearStaffPackagesCache } from "@/features/package-inbox/services/staffPackageCache";
-import { invalidateDispatchedPackagesCache } from "@/features/package-handover/services/handoverPackageCache";
 
 function codLabel(pkg: HubPackage): string | null {
   if (!pkg.isCod) return null;
@@ -388,20 +389,30 @@ function StaffReceivedBody({
             const cod = codLabel(pkg);
             return (
               <View key={pkg.id} style={styles.card}>
-                <View style={styles.cardTop}>
-                  <Text style={styles.recipient} numberOfLines={1}>
-                    {pkg.recipientName || "Recipient"}
-                  </Text>
-                  <Text style={styles.unit}>
-                    {formatUnitLabel(pkg.tower ?? pkg.towerWing, pkg.flat || pkg.flatNumber)}
-                  </Text>
-                </View>
-                <Text style={styles.courier}>{pkg.courier}</Text>
-                <Text style={styles.tracking}>{pkg.tracking}</Text>
-                <View style={styles.chips}>
-                  <Text style={styles.chipReceived}>Received</Text>
-                  {pkg.isColdStorage ? <Text style={styles.chipCold}>Needs cold</Text> : null}
-                  {cod ? <Text style={styles.chipCod}>{cod}</Text> : null}
+                <View style={styles.cardMain}>
+                  <ArrivalPhotoThumb pkg={pkg} size={64} />
+                  <View style={styles.cardBody}>
+                    <View style={styles.cardTop}>
+                      <Text style={styles.recipient} numberOfLines={1}>
+                        {pkg.recipientName || "Recipient"}
+                      </Text>
+                      <Text style={styles.unit}>
+                        {formatUnitLabel(pkg.tower ?? pkg.towerWing, pkg.flat || pkg.flatNumber)}
+                      </Text>
+                    </View>
+                    <Text style={styles.courier}>{pkg.courier}</Text>
+                    <Text style={styles.tracking}>{pkg.tracking}</Text>
+                    <View style={styles.chips}>
+                      <Text style={styles.chipReceived}>Received</Text>
+                      {pkg.isColdStorage ? <Text style={styles.chipCold}>Needs cold</Text> : null}
+                      {cod ? <Text style={styles.chipCod}>{cod}</Text> : null}
+                      {pkg.hasArrivalPhoto ? (
+                        <Text style={styles.chipPhoto}>Photo ✓</Text>
+                      ) : (
+                        <Text style={styles.chipNoPhoto}>No photo</Text>
+                      )}
+                    </View>
+                  </View>
                 </View>
 
                 <Pressable
@@ -517,6 +528,8 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 10,
   },
+  cardMain: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  cardBody: { flex: 1, minWidth: 0 },
   cardTop: { flexDirection: "row", justifyContent: "space-between", gap: 8 },
   recipient: { flex: 1, fontSize: 14, fontWeight: "700", color: colors.primary },
   unit: { fontSize: 10, color: "#9CA3AF", fontWeight: "600" },
@@ -528,6 +541,26 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#0369A1",
     backgroundColor: "#E0F2FE",
+    overflow: "hidden",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  chipPhoto: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#065F46",
+    backgroundColor: "#ECFDF5",
+    overflow: "hidden",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  chipNoPhoto: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#92400E",
+    backgroundColor: "#FFFBEB",
     overflow: "hidden",
     paddingHorizontal: 8,
     paddingVertical: 3,

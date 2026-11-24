@@ -60,7 +60,11 @@ export function StaffStackNavigator() {
       }}
     >
       <Stack.Screen name="Home" component={StaffHomeScreen} options={{ headerShown: false }} />
-      <Stack.Screen name="Scan" component={StaffScanScreen} options={{ ...detailScreenOptions, title: "Scan" }} />
+      <Stack.Screen
+        name="Scan"
+        component={StaffScanScreen}
+        options={{ ...detailScreenOptions, title: "Scan", headerShown: false }}
+      />
       <Stack.Screen
         name="Inbox"
         component={StaffReceivedPackagesScreen}

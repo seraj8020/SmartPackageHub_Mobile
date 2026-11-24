@@ -18,13 +18,14 @@ import {
   clearStaffSession,
   getStaffSession,
 } from "@/features/authentication/services/sessionStorage";
+import { ArrivalPhotoThumb } from "@/features/package-inbox/components/ArrivalPhotoThumb";
 import { useStaffReceive } from "@/features/package-inbox/hooks/useStaffReceive";
+import { clearStaffPackagesCache } from "@/features/package-inbox/services/staffPackageCache";
+import { invalidateDispatchedPackagesCache } from "@/features/package-handover/services/handoverPackageCache";
 import { getSocieties, type HubPackage } from "@/shared/services/packageApi";
 import { tokenStorage } from "@/shared/services/tokenStorage";
 import { colors } from "@/shared/theme/colors";
 import { formatUnitLabel } from "@/shared/utils/formatUnitLabel";
-import { clearStaffPackagesCache } from "@/features/package-inbox/services/staffPackageCache";
-import { invalidateDispatchedPackagesCache } from "@/features/package-handover/services/handoverPackageCache";
 
 export function StaffShelvedPackagesScreen() {
   const navigation = useNavigation();
@@ -205,20 +206,25 @@ function StaffShelvedBody({
             const door = pkg.preferredDeliveryMethod === "DoorDelivery";
             return (
               <View key={pkg.id} style={[styles.card, error ? styles.cardDanger : null]}>
-                <View style={styles.cardTop}>
-                  <Text style={styles.recipient} numberOfLines={1}>
-                    {pkg.recipientName || "Recipient"}
-                  </Text>
-                  <Text style={styles.unit}>
-                    {formatUnitLabel(pkg.tower ?? pkg.towerWing, pkg.flat || pkg.flatNumber)}
-                  </Text>
-                </View>
-                <Text style={styles.courier}>{pkg.courier}</Text>
-                <Text style={styles.tracking}>{pkg.tracking}</Text>
-                <View style={styles.chips}>
-                  <Text style={styles.shelfChip}>
-                    {pkg.shelfCode ? `Shelf ${pkg.shelfCode}` : "Shelf unassigned"}
-                  </Text>
+                <View style={styles.cardMain}>
+                  <ArrivalPhotoThumb pkg={pkg} size={56} />
+                  <View style={styles.cardBody}>
+                    <View style={styles.cardTop}>
+                      <Text style={styles.recipient} numberOfLines={1}>
+                        {pkg.recipientName || "Recipient"}
+                      </Text>
+                      <Text style={styles.unit}>
+                        {formatUnitLabel(pkg.tower ?? pkg.towerWing, pkg.flat || pkg.flatNumber)}
+                      </Text>
+                    </View>
+                    <Text style={styles.courier}>{pkg.courier}</Text>
+                    <Text style={styles.tracking}>{pkg.tracking}</Text>
+                    <View style={styles.chips}>
+                      <Text style={styles.shelfChip}>
+                        {pkg.shelfCode ? `Shelf ${pkg.shelfCode}` : "Shelf unassigned"}
+                      </Text>
+                    </View>
+                  </View>
                 </View>
                 {counter ? (
                   <Text style={styles.modeViolet}>
@@ -329,6 +335,8 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   cardDanger: { borderColor: "#FECACA" },
+  cardMain: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  cardBody: { flex: 1, minWidth: 0 },
   cardTop: { flexDirection: "row", justifyContent: "space-between", gap: 8 },
   recipient: { flex: 1, fontSize: 14, fontWeight: "700", color: colors.primary },
   unit: { fontSize: 10, color: "#9CA3AF", fontWeight: "600" },

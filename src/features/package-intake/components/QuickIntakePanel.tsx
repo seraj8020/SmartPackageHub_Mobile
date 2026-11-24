@@ -11,6 +11,8 @@ type Props = {
   onMarkDamaged: () => void;
   onDamageNoteChange: (value: string) => void;
   onStaffNameChange: (value: string) => void;
+  /** Hide staff name when it lives on the details screen. */
+  showStaffName?: boolean;
 };
 
 export function QuickIntakePanel({
@@ -23,6 +25,7 @@ export function QuickIntakePanel({
   onMarkDamaged,
   onDamageNoteChange,
   onStaffNameChange,
+  showStaffName = true,
 }: Props) {
   return (
     <View style={styles.wrap}>
@@ -72,14 +75,18 @@ export function QuickIntakePanel({
           style={styles.input}
         />
       ) : null}
-      <Text style={styles.label}>Staff name</Text>
-      <TextInput
-        value={staffName}
-        onChangeText={onStaffNameChange}
-        placeholder="Hub Staff"
-        placeholderTextColor="#9CA3AF"
-        style={styles.input}
-      />
+      {showStaffName ? (
+        <>
+          <Text style={styles.label}>Staff name</Text>
+          <TextInput
+            value={staffName}
+            onChangeText={onStaffNameChange}
+            placeholder="Hub Staff"
+            placeholderTextColor="#9CA3AF"
+            style={styles.input}
+          />
+        </>
+      ) : null}
     </View>
   );
 }

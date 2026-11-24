@@ -33,6 +33,7 @@ import {
   setCachedDispatchedPackages,
   subscribeToDispatchedPackages,
 } from "@/features/package-handover/services/handoverPackageCache";
+import { ArrivalPhotoThumb } from "@/features/package-inbox/components/ArrivalPhotoThumb";
 import { updateCachedStaffPackage } from "@/features/package-inbox/services/staffPackageCache";
 import {
   SignaturePad,
@@ -227,6 +228,7 @@ export function StaffHandoverScreen({ societyId }: { societyId: string }) {
             accessibilityLabel={holdActive ? `${pkg.recipientName || "Resident"} is on vacation hold` : undefined}
             style={({ pressed }) => [CARD, styles.packageCard, disabled && styles.packageBlocked, pressed && !disabled && styles.pressed]}
           >
+            <ArrivalPhotoThumb pkg={pkg} size={56} />
             <View style={styles.packageInfo}>
               <View style={styles.rowBetween}>
                 <Text style={styles.recipient} numberOfLines={1}>{pkg.recipientName || "Recipient"}</Text>

@@ -31,6 +31,8 @@ type Props = {
   onBarcodeScanned: (result: BarcodeScanningResult) => void;
   onCameraReady?: () => void;
   onStartCamera: () => void;
+  /** Larger preview when Scan is camera-only (default stays compact for legacy layouts). */
+  frameSize?: "default" | "large";
   style?: StyleProp<ViewStyle>;
 };
 
@@ -46,7 +48,9 @@ export function IntakeCameraPanel({
   onBarcodeScanned,
   onCameraReady,
   onStartCamera,
+  frameSize = "default",
 }: Props) {
+  const shellStyle = frameSize === "large" ? styles.shellLarge : styles.shell;
   const [permission, requestPermission] = useCameraPermissions();
   const [starting, setStarting] = useState(false);
   const [permError, setPermError] = useState<string | null>(null);
@@ -88,7 +92,7 @@ export function IntakeCameraPanel({
 
   if (!permission) {
     return (
-      <View style={styles.shell}>
+      <View style={shellStyle}>
         <ActivityIndicator color="#fff" />
         <Text style={styles.loadingText}>Checking camera permission…</Text>
         <Pressable
@@ -104,7 +108,7 @@ export function IntakeCameraPanel({
 
   if (!permission.granted && cameraOn) {
     return (
-      <View style={styles.shell}>
+      <View style={shellStyle}>
         <Text style={styles.permTitle}>Camera access needed</Text>
         <Text style={styles.permBody}>
           Staff intake scans tracking barcodes on-device. Allow camera to continue.
@@ -121,7 +125,7 @@ export function IntakeCameraPanel({
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.shell}>
+      <View style={shellStyle}>
         {cameraOn ? (
           <>
             <CameraView
@@ -136,12 +140,15 @@ export function IntakeCameraPanel({
               onCameraReady={onCameraReady}
               onBarcodeScanned={scanningEnabled ? onBarcodeScanned : undefined}
             />
-            <View style={styles.reticle} pointerEvents="none" />
+            <View
+              style={frameSize === "large" ? styles.reticleLarge : styles.reticle}
+              pointerEvents="none"
+            />
             {reading ? (
               <View style={styles.readingOverlay}>
                 <ActivityIndicator color="#fff" />
                 <Text style={styles.readingText}>Reading label…</Text>
-                <Text style={styles.readingHint}>You can still edit fields below</Text>
+                <Text style={styles.readingHint}>Then continue to edit package details</Text>
               </View>
             ) : null}
           </>
@@ -187,10 +194,26 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  shellLarge: {
+    height: 380,
+    borderRadius: 16,
+    overflow: "hidden",
+    backgroundColor: "#0a1f35",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   reticle: {
     position: "absolute",
     width: "72%",
     height: 88,
+    borderWidth: 2,
+    borderColor: "rgba(14, 165, 233, 0.6)",
+    borderRadius: 12,
+  },
+  reticleLarge: {
+    position: "absolute",
+    width: "78%",
+    height: 140,
     borderWidth: 2,
     borderColor: "rgba(14, 165, 233, 0.6)",
     borderRadius: 12,
