@@ -35,6 +35,8 @@ export interface HubPackage {
   shelfTier?: number;
   shelfCapacity?: number;
   isColdStorage?: boolean;
+  /** Outer package damage recorded by hub staff at intake. */
+  isDamaged?: boolean;
   status?: PackageLifecycleStatus;
   isCod?: boolean;
   codAmount?: number;
@@ -69,6 +71,8 @@ export interface HistoryItem {
   /** Courier AWB / airway bill. */
   courierAwb?: string;
   methodOfDelivery?: string;
+  /** Outer package damage recorded by hub staff at intake. */
+  isDamaged?: boolean;
 }
 
 export interface PackageStatusUpdateResponse {
@@ -197,6 +201,7 @@ export function toHubPackage(row: Record<string, unknown>): HubPackage {
     })(),
     shelfCapacity: Number(row.shelfCapacity ?? row.ShelfCapacity) || undefined,
     isColdStorage: row.isColdStorage === true || row.IsColdStorage === true,
+    isDamaged: row.isDamaged === true || row.IsDamaged === true,
     status: textOf(row, "status", "Status") || undefined,
     isCod: typeof isCodRaw === "boolean" ? isCodRaw : undefined,
     codAmount:
@@ -313,9 +318,16 @@ export async function damagePhotoRequestHeaders(photoUrl: string): Promise<Recor
 export const arrivalPhotoRequestHeaders = damagePhotoRequestHeaders;
 
 /** Returns packages that have been collected or delivered by a resident. */
-export async function getResidentHistory(residentId: string): Promise<HistoryItem[]> {
+export async function getResidentHistory(
+  residentId: string,
+  dateRange?: { fromDate?: string; toDate?: string },
+): Promise<HistoryItem[]> {
+  const query = new URLSearchParams();
+  if (dateRange?.fromDate) query.set("fromDate", dateRange.fromDate);
+  if (dateRange?.toDate) query.set("toDate", dateRange.toDate);
+  const queryString = query.toString();
   const response = await apiFetch(
-    `${API}/residents/${encodeURIComponent(residentId)}/history`,
+    `${API}/residents/${encodeURIComponent(residentId)}/history${queryString ? `?${queryString}` : ""}`,
     { headers: await authHeaders() },
   );
   if (!response.ok) {
@@ -339,6 +351,7 @@ export async function getResidentHistory(residentId: string): Promise<HistoryIte
       trackingNumber: textOf(row, "trackingNumber", "TrackingNumber") || undefined,
       courierAwb: textOf(row, "courierAwb", "CourierAwb", "awb", "Awb") || undefined,
       methodOfDelivery: method || undefined,
+      isDamaged: row.isDamaged === true || row.IsDamaged === true,
     };
   });
 }

@@ -302,6 +302,7 @@ export function ResidentHomeScreen() {
                     ) : null}
                   </View>
                 ) : null}
+                {pkg.isDamaged ? <Text style={styles.damageChip}>Damaged on arrival</Text> : null}
                 {pkg.isCod ? (
                   <Text style={styles.codChip}>
                     COD
@@ -492,6 +493,20 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 6,
     overflow: "hidden",
+  },
+  damageChip: {
+    alignSelf: "flex-start",
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: "#FED7AA",
+    borderRadius: 6,
+    backgroundColor: "#FFF7ED",
+    color: "#B45309",
+    fontSize: 10,
+    fontWeight: "800",
+    overflow: "hidden",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
   prefChip: {
     marginTop: 8,
