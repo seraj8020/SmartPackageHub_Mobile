@@ -7,7 +7,8 @@ import { StaffScanScreen } from "@/features/package-intake/screens/StaffScanScre
 import { RunnerRouteScreen } from "@/features/package-handover/screens/RunnerRouteScreen";
 import { ShelfInventoryScreen } from "@/features/shelf-management/screens/ShelfInventoryScreen";
 import { StaffDoneScreen, StaffHandoverScreen } from "@/features/package-handover/screens/HandoverScreens";
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import { getStaffSession } from "@/features/authentication/services/sessionStorage";
 import { colors } from "@/shared/theme/colors";
 import { hubColors } from "@/shared/ui/hub/hubTheme";
@@ -24,16 +25,18 @@ const detailScreenOptions = {
 
 function useStaffSocietyId() {
   const [societyId, setSocietyId] = useState("");
-  useEffect(() => {
-    let active = true;
-    void getStaffSession().then((session) => {
-      if (!active || !session) return;
-      setSocietyId(session.primarySocietyId ?? session.societyIds[0] ?? "");
-    });
-    return () => {
-      active = false;
-    };
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      void getStaffSession().then((session) => {
+        if (!active || !session) return;
+        setSocietyId(session.primarySocietyId ?? session.societyIds[0] ?? "");
+      });
+      return () => {
+        active = false;
+      };
+    }, []),
+  );
   return societyId;
 }
 
