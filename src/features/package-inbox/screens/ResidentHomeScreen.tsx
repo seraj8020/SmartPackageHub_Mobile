@@ -24,6 +24,10 @@ import {
   setCachedResidentPackages,
 } from "@/features/package-inbox/services/residentPackageCache";
 import {
+  isResidentAwaitingPackage,
+  isResidentInboxPackage,
+} from "@/features/package-inbox/utils/residentPackageStatus";
+import {
   arrivalPhotoRequestHeaders,
   getResidentPackages,
   getSocieties,
@@ -54,7 +58,7 @@ export function ResidentHomeScreen() {
   const inboxPackages = useMemo(
     () =>
       packages
-        .filter((pkg) => (pkg.status ?? "Shelved") === "Shelved")
+        .filter(isResidentInboxPackage)
         .slice()
         .sort((a, b) => (Date.parse(b.receivedAt) || 0) - (Date.parse(a.receivedAt) || 0)),
     [packages],
@@ -79,11 +83,8 @@ export function ResidentHomeScreen() {
       (pkg.status ?? "Received") === "Received",
   ).length;
 
-  // Packages still at hub / out for delivery (API drops them once Delivered).
-  const awaitingCount = packages.filter((pkg) => {
-    const status = pkg.status ?? "Shelved";
-    return status === "Shelved" || status === "Dispatched";
-  }).length;
+  // Bell badge: same open set as the inbox list (API drops Delivered).
+  const awaitingCount = packages.filter(isResidentAwaitingPackage).length;
 
   // Dot while something awaits the resident; COD pending also keeps the badge.
   const showBellBadge = awaitingCount > 0 || pendingCodCount > 0;
@@ -240,7 +241,7 @@ export function ResidentHomeScreen() {
         }
         ListHeaderComponent={
           <View>
-            <Text style={styles.sectionTitle}>Shelved at the Hub</Text>
+            <Text style={styles.sectionTitle}>At hub & out for delivery</Text>
             <Text style={styles.sectionHint}>
               Arrival photo on each card · tap a package for details, authorize collector, or book delivery
             </Text>

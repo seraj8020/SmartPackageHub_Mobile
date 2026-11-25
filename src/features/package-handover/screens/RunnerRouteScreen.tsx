@@ -26,6 +26,7 @@ import {
 } from "@/shared/services/packageApi";
 import { updateCachedStaffPackage } from "@/features/package-inbox/services/staffPackageCache";
 import { upsertCachedDispatchedPackage } from "@/features/package-handover/services/handoverPackageCache";
+import { isRunnerRouteEligible } from "@/features/package-handover/utils/staffPackageCounts";
 import { colors } from "@/shared/theme/colors";
 import { formatTowerLabel, formatUnitLabel } from "@/shared/utils/formatUnitLabel";
 
@@ -117,10 +118,7 @@ export function RunnerRouteScreen({ societyId: societyIdProp, runnerName: runner
     return () => { active = false; };
   }, [societyId, reloadKey]));
 
-  const eligible = useMemo(
-    () => packages.filter((pkg) => pkg.status?.trim().toLowerCase() === "shelved" && Boolean((pkg.tower || pkg.towerWing)?.trim())),
-    [packages],
-  );
+  const eligible = useMemo(() => packages.filter(isRunnerRouteEligible), [packages]);
   const towers = useMemo(
     () => Array.from(new Set(eligible.map((pkg) => (pkg.tower || pkg.towerWing || "").trim()))).sort(
       (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }),

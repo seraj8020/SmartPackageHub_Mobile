@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useIsFocused } from "@react-navigation/native";
 import {
   dispatchPackage,
   getSocietyPackages,
@@ -15,6 +16,7 @@ import {
 import { upsertCachedDispatchedPackage } from "@/features/package-handover/services/handoverPackageCache";
 
 export function useStaffReceive(societyId: string) {
+  const isFocused = useIsFocused();
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [hubPackages, setHubPackages] = useState<HubPackage[]>(
@@ -27,6 +29,7 @@ export function useStaffReceive(societyId: string) {
 
   const [reloadPackages, setReloadPackages] = useState(0);
   useEffect(() => {
+    if (!isFocused) return;
     let mounted = true;
     async function load(force: boolean, showSpinner: boolean) {
       if (!societyId) {
@@ -59,9 +62,10 @@ export function useStaffReceive(societyId: string) {
     }
 
     void load(reloadPackages > 0, true);
+    // Only poll while Receive/Shelf is focused — avoids background refetch fighting image loads.
     const timer = setInterval(() => void load(true, false), STAFF_PACKAGES_CACHE_TTL_MS);
     return () => { mounted = false; clearInterval(timer); };
-  }, [societyId, reloadPackages]);
+  }, [societyId, reloadPackages, isFocused]);
 
   const reload = useCallback(() => setReloadPackages((value) => value + 1), []);
 

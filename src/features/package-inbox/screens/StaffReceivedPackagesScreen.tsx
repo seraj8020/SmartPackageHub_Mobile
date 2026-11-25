@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  FlatList,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   TextInput,
   Text,
@@ -31,7 +31,12 @@ import { clearStaffPackagesCache } from "@/features/package-inbox/services/staff
 import { invalidateDispatchedPackagesCache } from "@/features/package-handover/services/handoverPackageCache";
 import { useShelfPicker } from "@/features/shelf-management/hooks/useShelfPicker";
 import { rowFromShelfCode } from "@/features/shelf-management/utils/shelfCapacity";
-import { getSocieties, type HubPackage } from "@/shared/services/packageApi";
+import {
+  arrivalPhotoRequestHeaders,
+  getSocieties,
+  staffArrivalPhotoProxyUrl,
+  type HubPackage,
+} from "@/shared/services/packageApi";
 import { tokenStorage } from "@/shared/services/tokenStorage";
 import { colors } from "@/shared/theme/colors";
 import { formatUnitLabel } from "@/shared/utils/formatUnitLabel";
@@ -161,6 +166,13 @@ function StaffReceivedBody({
   const [receipt, setReceipt] = useState<ConfirmIntakeResult | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
+  const [photoHeaders, setPhotoHeaders] = useState<Record<string, string> | undefined>();
+
+  useEffect(() => {
+    void arrivalPhotoRequestHeaders(staffArrivalPhotoProxyUrl("preload"))
+      .then(setPhotoHeaders)
+      .catch(() => undefined);
+  }, []);
 
   const received = hubPackages.filter((pkg) => (pkg.status ?? "Received") === "Received");
   const normalizedSearch = search.trim().toLocaleLowerCase();
@@ -330,145 +342,160 @@ function StaffReceivedBody({
         </Text>
       </View>
 
-      <ScrollView
+      <FlatList
+        data={
+          packageLoadError && received.length === 0
+            ? []
+            : received.length === 0
+              ? []
+              : filteredReceived
+        }
+        keyExtractor={(pkg) => pkg.id}
         contentContainerStyle={styles.list}
+        initialNumToRender={8}
+        maxToRenderPerBatch={8}
+        windowSize={7}
+        removeClippedSubviews
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} />
         }
-      >
-        <View style={styles.countRow}>
-          <Text style={styles.countLabel}>Waiting ({filteredReceived.length})</Text>
-          <Pressable onPress={() => void onRefresh()} hitSlop={8}>
-            <Ionicons name="refresh" size={16} color={colors.primary} />
-          </Pressable>
-        </View>
-
-        <View style={styles.searchBox}>
-          <Ionicons name="search" size={17} color="#9CA3AF" />
-          <TextInput
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Search name, tower or flat"
-            placeholderTextColor="#9CA3AF"
-            autoCapitalize="none"
-            returnKeyType="search"
-            style={styles.searchInput}
-            accessibilityLabel="Search received packages by name, tower or flat"
-          />
-          {search.length > 0 ? (
-            <Pressable onPress={() => setSearch("")} hitSlop={8} accessibilityLabel="Clear search">
-              <Ionicons name="close-circle" size={18} color="#9CA3AF" />
-            </Pressable>
-          ) : null}
-        </View>
-
-        {packageLoadError && received.length === 0 ? (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{packageLoadError}</Text>
-            <Pressable onPress={reload}>
-              <Text style={styles.retry}>Retry loading packages</Text>
-            </Pressable>
+        ListHeaderComponent={
+          <View>
+            <View style={styles.countRow}>
+              <Text style={styles.countLabel}>Waiting ({filteredReceived.length})</Text>
+              <Pressable onPress={() => void onRefresh()} hitSlop={8}>
+                <Ionicons name="refresh" size={16} color={colors.primary} />
+              </Pressable>
+            </View>
+            <View style={styles.searchBox}>
+              <Ionicons name="search" size={17} color="#9CA3AF" />
+              <TextInput
+                value={search}
+                onChangeText={setSearch}
+                placeholder="Search name, tower or flat"
+                placeholderTextColor="#9CA3AF"
+                autoCapitalize="none"
+                returnKeyType="search"
+                style={styles.searchInput}
+                accessibilityLabel="Search received packages by name, tower or flat"
+              />
+              {search.length > 0 ? (
+                <Pressable onPress={() => setSearch("")} hitSlop={8} accessibilityLabel="Clear search">
+                  <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+                </Pressable>
+              ) : null}
+            </View>
           </View>
-        ) : received.length === 0 ? (
-          <View style={styles.empty}>
-            <Ionicons name="file-tray-outline" size={22} color="#D1D5DB" />
-            <Text style={styles.emptyTitle}>No received packages</Text>
-            <Text style={styles.emptyBody}>
-              Scan packages first. They appear here until a shelf is assigned.
-            </Text>
-          </View>
-        ) : (
-          filteredReceived.length === 0 ? (
+        }
+        ListEmptyComponent={
+          packageLoadError && received.length === 0 ? (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorText}>{packageLoadError}</Text>
+              <Pressable onPress={reload}>
+                <Text style={styles.retry}>Retry loading packages</Text>
+              </Pressable>
+            </View>
+          ) : received.length === 0 ? (
+            <View style={styles.empty}>
+              <Ionicons name="file-tray-outline" size={22} color="#D1D5DB" />
+              <Text style={styles.emptyTitle}>No received packages</Text>
+              <Text style={styles.emptyBody}>
+                Scan packages first. They appear here until a shelf is assigned.
+              </Text>
+            </View>
+          ) : (
             <View style={styles.empty}>
               <Text style={styles.emptyTitle}>No matching packages</Text>
               <Text style={styles.emptyBody}>Try another name, tower or flat.</Text>
             </View>
-          ) : filteredReceived.map((pkg) => {
-            const open = selectedId === pkg.id;
-            const assignable = canAssignShelf(pkg);
-            const cod = codLabel(pkg);
-            return (
-              <View key={pkg.id} style={styles.card}>
-                <View style={styles.cardMain}>
-                  <ArrivalPhotoThumb pkg={pkg} size={64} />
-                  <View style={styles.cardBody}>
-                    <View style={styles.cardTop}>
-                      <Text style={styles.recipient} numberOfLines={1}>
-                        {pkg.recipientName || "Recipient"}
-                      </Text>
-                      <Text style={styles.unit}>
-                        {formatUnitLabel(pkg.tower ?? pkg.towerWing, pkg.flat || pkg.flatNumber)}
-                      </Text>
-                    </View>
-                    <Text style={styles.courier}>{pkg.courier}</Text>
-                    <Text style={styles.tracking}>{pkg.tracking}</Text>
-                    <View style={styles.chips}>
-                      <Text style={styles.chipReceived}>Received</Text>
-                      {pkg.isColdStorage ? <Text style={styles.chipCold}>Needs cold</Text> : null}
-                      {cod ? <Text style={styles.chipCod}>{cod}</Text> : null}
-                      {pkg.hasArrivalPhoto ? (
-                        <Text style={styles.chipPhoto}>Photo ✓</Text>
-                      ) : (
-                        <Text style={styles.chipNoPhoto}>No photo</Text>
-                      )}
-                    </View>
+          )
+        }
+        ListFooterComponent={
+          error ? (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null
+        }
+        renderItem={({ item: pkg }) => {
+          const open = selectedId === pkg.id;
+          const assignable = canAssignShelf(pkg);
+          const cod = codLabel(pkg);
+          return (
+            <View style={styles.card}>
+              <View style={styles.cardMain}>
+                <ArrivalPhotoThumb pkg={pkg} size={64} photoHeaders={photoHeaders} />
+                <View style={styles.cardBody}>
+                  <View style={styles.cardTop}>
+                    <Text style={styles.recipient} numberOfLines={1}>
+                      {pkg.recipientName || "Recipient"}
+                    </Text>
+                    <Text style={styles.unit}>
+                      {formatUnitLabel(pkg.tower ?? pkg.towerWing, pkg.flat || pkg.flatNumber)}
+                    </Text>
+                  </View>
+                  <Text style={styles.courier}>{pkg.courier}</Text>
+                  <Text style={styles.tracking}>{pkg.tracking}</Text>
+                  <View style={styles.chips}>
+                    <Text style={styles.chipReceived}>Received</Text>
+                    {pkg.isColdStorage ? <Text style={styles.chipCold}>Needs cold</Text> : null}
+                    {cod ? <Text style={styles.chipCod}>{cod}</Text> : null}
+                    {pkg.hasArrivalPhoto ? (
+                      <Text style={styles.chipPhoto}>Photo ✓</Text>
+                    ) : (
+                      <Text style={styles.chipNoPhoto}>No photo</Text>
+                    )}
                   </View>
                 </View>
-
-                <Pressable
-                  style={[styles.assignBtn, !assignable && styles.assignBtnDisabled]}
-                  disabled={!assignable || busyId !== null}
-                  onPress={() => openAssignFor(pkg)}
-                >
-                  <Text style={styles.assignBtnText}>
-                    {!assignable
-                      ? pkg.codApprovalStatus === "Rejected"
-                        ? "COD rejected"
-                        : "Awaiting COD approval"
-                      : open
-                        ? "Hide shelf picker"
-                        : "Assign shelf"}
-                  </Text>
-                </Pressable>
-
-                {open ? (
-                  <>
-                    <ShelfAssignmentForm
-                      shelf={shelf}
-                      row={row}
-                      suggested={suggested}
-                      storageFilter={shelfPicker.storageFilter}
-                      rows={shelfPicker.rows}
-                      options={shelfPicker.visible}
-                      loading={shelfPicker.loading}
-                      loadError={shelfPicker.error}
-                      onStorageFilterChange={shelfPicker.setStorageFilter}
-                      onRowChange={setRow}
-                      onShelfChange={setShelf}
-                      onRetryLoad={shelfPicker.reload}
-                    />
-                    <Pressable
-                      style={[styles.confirmBtn, busyId === pkg.id && styles.assignBtnDisabled]}
-                      disabled={busyId !== null}
-                      onPress={() => void handleAssignShelf(pkg)}
-                    >
-                      <Text style={styles.confirmBtnText}>
-                        {busyId === pkg.id ? "Saving shelf…" : `Confirm · ${shelf}`}
-                      </Text>
-                    </Pressable>
-                  </>
-                ) : null}
               </View>
-            );
-          })
-        )}
 
-        {error ? (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : null}
-      </ScrollView>
+              <Pressable
+                style={[styles.assignBtn, !assignable && styles.assignBtnDisabled]}
+                disabled={!assignable || busyId !== null}
+                onPress={() => openAssignFor(pkg)}
+              >
+                <Text style={styles.assignBtnText}>
+                  {!assignable
+                    ? pkg.codApprovalStatus === "Rejected"
+                      ? "COD rejected"
+                      : "Awaiting COD approval"
+                    : open
+                      ? "Hide shelf picker"
+                      : "Assign shelf"}
+                </Text>
+              </Pressable>
+
+              {open ? (
+                <>
+                  <ShelfAssignmentForm
+                    shelf={shelf}
+                    row={row}
+                    suggested={suggested}
+                    storageFilter={shelfPicker.storageFilter}
+                    rows={shelfPicker.rows}
+                    options={shelfPicker.visible}
+                    loading={shelfPicker.loading}
+                    loadError={shelfPicker.error}
+                    onStorageFilterChange={shelfPicker.setStorageFilter}
+                    onRowChange={setRow}
+                    onShelfChange={setShelf}
+                    onRetryLoad={shelfPicker.reload}
+                  />
+                  <Pressable
+                    style={[styles.confirmBtn, busyId === pkg.id && styles.assignBtnDisabled]}
+                    disabled={busyId !== null}
+                    onPress={() => void handleAssignShelf(pkg)}
+                  >
+                    <Text style={styles.confirmBtnText}>
+                      {busyId === pkg.id ? "Saving shelf…" : `Confirm · ${shelf}`}
+                    </Text>
+                  </Pressable>
+                </>
+              ) : null}
+            </View>
+          );
+        }}
+      />
     </View>
   );
 }

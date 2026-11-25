@@ -17,6 +17,10 @@ import {
 } from "@/features/package-inbox/services/staffPackageCache";
 import { invalidateDispatchedPackagesCache } from "@/features/package-handover/services/handoverPackageCache";
 import {
+  isRunnerRouteEligible,
+  isStaffOutForDelivery,
+} from "@/features/package-handover/utils/staffPackageCounts";
+import {
   getSocieties,
   getSocietyDeliveredPackages,
   getSocietyDispatchedPackages,
@@ -49,6 +53,7 @@ export function StaffHomeScreen() {
   const [session, setSession] = useState<StaffSessionState | null>(null);
   const [societyName, setSocietyName] = useState("Your society");
   const [packages, setPackages] = useState<HubPackage[]>([]);
+  const [routeEligibleCount, setRouteEligibleCount] = useState(0);
   const [dispatchedCount, setDispatchedCount] = useState(0);
   const [deliveredTodayCount, setDeliveredTodayCount] = useState(0);
 
@@ -91,15 +96,15 @@ export function StaffHomeScreen() {
   useFocusEffect(
     useCallback(() => {
       if (!societyId) return;
-      const cached = getCachedStaffPackages(societyId);
-      if (cached) {
-        setPackages(cached);
-        setDispatchedCount(countByStatus(cached, "Dispatched"));
-      }
-      const unsubscribe = subscribeToStaffPackages(societyId, (rows) => {
+      const applyCounts = (rows: HubPackage[]) => {
         setPackages(rows);
-        setDispatchedCount(countByStatus(rows, "Dispatched"));
-      });
+        // Out for delivery → Runner route lists shelved-with-tower, not Dispatched.
+        setRouteEligibleCount(rows.filter(isRunnerRouteEligible).length);
+        setDispatchedCount(rows.filter(isStaffOutForDelivery).length);
+      };
+      const cached = getCachedStaffPackages(societyId);
+      if (cached) applyCounts(cached);
+      const unsubscribe = subscribeToStaffPackages(societyId, applyCounts);
       let active = true;
       // Society /packages used to omit Dispatched — still merge dedicated dispatched
       // + delivered endpoints so home tiles stay correct even before API deploy.
@@ -117,10 +122,7 @@ export function StaffHomeScreen() {
           }
           const merged = [...byId.values()];
           setCachedStaffPackages(societyId, merged);
-          setPackages(merged);
-          setDispatchedCount(
-            merged.filter((pkg) => (pkg.status ?? "") === "Dispatched" && !pkg.deliveredAt).length,
-          );
+          applyCounts(merged);
           setDeliveredTodayCount(deliveredRows.filter((pkg) => isDeliveredToday(pkg)).length);
         })
         .catch(() => undefined);
@@ -179,7 +181,7 @@ export function StaffHomeScreen() {
           title="Out for delivery"
           subtitle="Runner route"
           icon="map-outline"
-          count={dispatchedCount}
+          count={routeEligibleCount}
           onPress={() => navigation.navigate("Route")}
         />
         <HubTile

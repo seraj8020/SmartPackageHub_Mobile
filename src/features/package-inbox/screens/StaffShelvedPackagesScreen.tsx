@@ -1,9 +1,9 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  FlatList,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -22,7 +22,12 @@ import { ArrivalPhotoThumb } from "@/features/package-inbox/components/ArrivalPh
 import { useStaffReceive } from "@/features/package-inbox/hooks/useStaffReceive";
 import { clearStaffPackagesCache } from "@/features/package-inbox/services/staffPackageCache";
 import { invalidateDispatchedPackagesCache } from "@/features/package-handover/services/handoverPackageCache";
-import { getSocieties, type HubPackage } from "@/shared/services/packageApi";
+import {
+  arrivalPhotoRequestHeaders,
+  getSocieties,
+  staffArrivalPhotoProxyUrl,
+  type HubPackage,
+} from "@/shared/services/packageApi";
 import { tokenStorage } from "@/shared/services/tokenStorage";
 import { colors } from "@/shared/theme/colors";
 import { formatUnitLabel } from "@/shared/utils/formatUnitLabel";
@@ -118,6 +123,13 @@ function StaffShelvedBody({
   } = useStaffReceive(societyId);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
+  const [photoHeaders, setPhotoHeaders] = useState<Record<string, string> | undefined>();
+
+  useEffect(() => {
+    void arrivalPhotoRequestHeaders(staffArrivalPhotoProxyUrl("preload"))
+      .then(setPhotoHeaders)
+      .catch(() => undefined);
+  }, []);
 
   const pending = hubPackages.filter(
     (pkg) =>
@@ -145,8 +157,20 @@ function StaffShelvedBody({
         </Text>
       </View>
 
-      <ScrollView
+      <FlatList
+        data={
+          packageLoadError && pending.length === 0
+            ? []
+            : pending.length === 0
+              ? []
+              : filteredPending
+        }
+        keyExtractor={(pkg) => pkg.id}
         contentContainerStyle={styles.list}
+        initialNumToRender={8}
+        maxToRenderPerBatch={8}
+        windowSize={7}
+        removeClippedSubviews
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -157,129 +181,132 @@ function StaffShelvedBody({
             }}
           />
         }
-      >
-        <Text style={styles.countLabel}>On shelf ({filteredPending.length})</Text>
-        <View style={styles.searchBox}>
-          <Ionicons name="search" size={17} color="#9CA3AF" />
-          <TextInput
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Search name, tower or flat"
-            placeholderTextColor="#9CA3AF"
-            autoCapitalize="none"
-            returnKeyType="search"
-            style={styles.searchInput}
-            accessibilityLabel="Search shelved packages by name, tower or flat"
-          />
-          {search.length > 0 ? (
-            <Pressable onPress={() => setSearch("")} hitSlop={8} accessibilityLabel="Clear search">
-              <Ionicons name="close-circle" size={18} color="#9CA3AF" />
-            </Pressable>
-          ) : null}
-        </View>
-
-        {packageLoadError && pending.length === 0 ? (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{packageLoadError}</Text>
-            <Pressable onPress={reload}>
-              <Text style={styles.retry}>Retry loading packages</Text>
-            </Pressable>
+        ListHeaderComponent={
+          <View>
+            <Text style={styles.countLabel}>On shelf ({filteredPending.length})</Text>
+            <View style={styles.searchBox}>
+              <Ionicons name="search" size={17} color="#9CA3AF" />
+              <TextInput
+                value={search}
+                onChangeText={setSearch}
+                placeholder="Search name, tower or flat"
+                placeholderTextColor="#9CA3AF"
+                autoCapitalize="none"
+                returnKeyType="search"
+                style={styles.searchInput}
+                accessibilityLabel="Search shelved packages by name, tower or flat"
+              />
+              {search.length > 0 ? (
+                <Pressable onPress={() => setSearch("")} hitSlop={8} accessibilityLabel="Clear search">
+                  <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+                </Pressable>
+              ) : null}
+            </View>
           </View>
-        ) : pending.length === 0 ? (
-          <View style={styles.empty}>
-            <Ionicons name="cube-outline" size={22} color="#D1D5DB" />
-            <Text style={styles.emptyTitle}>No shelved packages</Text>
-            <Text style={styles.emptyBody}>
-              Assign a shelf from Inbox to move packages here.
-            </Text>
-          </View>
-        ) : (
-          filteredPending.length === 0 ? (
+        }
+        ListEmptyComponent={
+          packageLoadError && pending.length === 0 ? (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorText}>{packageLoadError}</Text>
+              <Pressable onPress={reload}>
+                <Text style={styles.retry}>Retry loading packages</Text>
+              </Pressable>
+            </View>
+          ) : pending.length === 0 ? (
+            <View style={styles.empty}>
+              <Ionicons name="cube-outline" size={22} color="#D1D5DB" />
+              <Text style={styles.emptyTitle}>No shelved packages</Text>
+              <Text style={styles.emptyBody}>
+                Assign a shelf from Inbox to move packages here.
+              </Text>
+            </View>
+          ) : (
             <View style={styles.empty}>
               <Text style={styles.emptyTitle}>No matching packages</Text>
               <Text style={styles.emptyBody}>Try another name, tower or flat.</Text>
             </View>
-          ) : filteredPending.map((pkg) => {
-            const error = errors[pkg.id];
-            const isLoading = loadingId === pkg.id;
-            const counter = pkg.preferredDeliveryMethod === "CounterPickup";
-            const door = pkg.preferredDeliveryMethod === "DoorDelivery";
-            return (
-              <View key={pkg.id} style={[styles.card, error ? styles.cardDanger : null]}>
-                <View style={styles.cardMain}>
-                  <ArrivalPhotoThumb pkg={pkg} size={56} />
-                  <View style={styles.cardBody}>
-                    <View style={styles.cardTop}>
-                      <Text style={styles.recipient} numberOfLines={1}>
-                        {pkg.recipientName || "Recipient"}
-                      </Text>
-                      <Text style={styles.unit}>
-                        {formatUnitLabel(pkg.tower ?? pkg.towerWing, pkg.flat || pkg.flatNumber)}
-                      </Text>
-                    </View>
-                    <Text style={styles.courier}>{pkg.courier}</Text>
-                    <Text style={styles.tracking}>{pkg.tracking}</Text>
-                    <View style={styles.chips}>
-                      <Text style={styles.shelfChip}>
-                        {pkg.shelfCode ? `Shelf ${pkg.shelfCode}` : "Shelf unassigned"}
-                      </Text>
-                    </View>
+          )
+        }
+        renderItem={({ item: pkg }) => {
+          const error = errors[pkg.id];
+          const isLoading = loadingId === pkg.id;
+          const counter = pkg.preferredDeliveryMethod === "CounterPickup";
+          const door = pkg.preferredDeliveryMethod === "DoorDelivery";
+          return (
+            <View style={[styles.card, error ? styles.cardDanger : null]}>
+              <View style={styles.cardMain}>
+                <ArrivalPhotoThumb pkg={pkg} size={56} photoHeaders={photoHeaders} />
+                <View style={styles.cardBody}>
+                  <View style={styles.cardTop}>
+                    <Text style={styles.recipient} numberOfLines={1}>
+                      {pkg.recipientName || "Recipient"}
+                    </Text>
+                    <Text style={styles.unit}>
+                      {formatUnitLabel(pkg.tower ?? pkg.towerWing, pkg.flat || pkg.flatNumber)}
+                    </Text>
+                  </View>
+                  <Text style={styles.courier}>{pkg.courier}</Text>
+                  <Text style={styles.tracking}>{pkg.tracking}</Text>
+                  <View style={styles.chips}>
+                    <Text style={styles.shelfChip}>
+                      {pkg.shelfCode ? `Shelf ${pkg.shelfCode}` : "Shelf unassigned"}
+                    </Text>
                   </View>
                 </View>
-                {counter ? (
-                  <Text style={styles.modeViolet}>
-                    Delivery mode · Counter pickup · keep at hub
-                  </Text>
-                ) : door ? (
-                  <Text style={styles.modeGreen}>
-                    Delivery mode · Door delivery
-                    {pkg.deliverySlotLabel ? ` · ${pkg.deliverySlotLabel}` : ""}
-                  </Text>
-                ) : pkg.deliverySlotLabel ? (
-                  <Text
-                    style={
-                      pkg.deliverySlotStatus === "booked"
-                        ? styles.modeGreen
-                        : styles.modeAmber
-                    }
-                  >
-                    {pkg.deliverySlotStatus === "booked"
-                      ? `Resident booked door ${pkg.deliverySlotLabel}`
-                      : `Door slot ${pkg.deliverySlotLabel} (default)`}
-                  </Text>
-                ) : (
-                  <Text style={styles.modeGray}>Delivery mode · not set by resident</Text>
-                )}
-
-                <View style={styles.footer}>
-                  <Text style={styles.meta}>
-                    {pkg.category}
-                    {pkg.weight ? ` · ${pkg.weight}` : ""}
-                  </Text>
-                  {counter ? (
-                    <Text style={styles.keepChip}>Keep at hub</Text>
-                  ) : (
-                    <Pressable
-                      style={[styles.dispatchBtn, loadingId !== null && styles.disabled]}
-                      disabled={loadingId !== null}
-                      onPress={() => void handleDispatch(pkg)}
-                    >
-                      <Text style={styles.dispatchText}>
-                        {isLoading
-                          ? "Sending…"
-                          : door
-                            ? "Dispatch for door"
-                            : "Ready to Dispatch"}
-                      </Text>
-                    </Pressable>
-                  )}
-                </View>
-                {error ? <Text style={styles.itemError}>{error}</Text> : null}
               </View>
-            );
-          })
-        )}
-      </ScrollView>
+              {counter ? (
+                <Text style={styles.modeViolet}>
+                  Delivery mode · Counter pickup · keep at hub
+                </Text>
+              ) : door ? (
+                <Text style={styles.modeGreen}>
+                  Delivery mode · Door delivery
+                  {pkg.deliverySlotLabel ? ` · ${pkg.deliverySlotLabel}` : ""}
+                </Text>
+              ) : pkg.deliverySlotLabel ? (
+                <Text
+                  style={
+                    pkg.deliverySlotStatus === "booked"
+                      ? styles.modeGreen
+                      : styles.modeAmber
+                  }
+                >
+                  {pkg.deliverySlotStatus === "booked"
+                    ? `Resident booked door ${pkg.deliverySlotLabel}`
+                    : `Door slot ${pkg.deliverySlotLabel} (default)`}
+                </Text>
+              ) : (
+                <Text style={styles.modeGray}>Delivery mode · not set by resident</Text>
+              )}
+
+              <View style={styles.footer}>
+                <Text style={styles.meta}>
+                  {pkg.category}
+                  {pkg.weight ? ` · ${pkg.weight}` : ""}
+                </Text>
+                {counter ? (
+                  <Text style={styles.keepChip}>Keep at hub</Text>
+                ) : (
+                  <Pressable
+                    style={[styles.dispatchBtn, loadingId !== null && styles.disabled]}
+                    disabled={loadingId !== null}
+                    onPress={() => void handleDispatch(pkg)}
+                  >
+                    <Text style={styles.dispatchText}>
+                      {isLoading
+                        ? "Sending…"
+                        : door
+                          ? "Dispatch for door"
+                          : "Ready to Dispatch"}
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
+              {error ? <Text style={styles.itemError}>{error}</Text> : null}
+            </View>
+          );
+        }}
+      />
     </View>
   );
 }

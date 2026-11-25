@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import {
   ActivityIndicator,
+  FlatList,
   Image,
   Pressable,
   RefreshControl,
@@ -15,11 +16,13 @@ import { CameraView, useCameraPermissions, type BarcodeScanningResult } from "ex
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "@/shared/theme/colors";
 import {
+  arrivalPhotoRequestHeaders,
   getSocietyDeliveredPackages,
   getSocietyDispatchedPackages,
   generatePackagePickupOtp,
   markPackageDelivered,
   reShelveAfterFailedDelivery,
+  staffArrivalPhotoProxyUrl,
   type DeliveryMethod,
   type HubPackage,
 } from "@/shared/services/packageApi";
@@ -39,6 +42,7 @@ import {
   SignaturePad,
   strokesToSvgBase64,
 } from "@/features/package-handover/components/SignaturePad";
+import { isStaffOutForDelivery } from "@/features/package-handover/utils/staffPackageCounts";
 import { getVacationHold } from "@/features/vacation-hold/services/vacationHoldApi";
 import { isHoldCoveringToday } from "@/features/vacation-hold/utils/vacationHoldDates";
 
@@ -53,12 +57,19 @@ export function StaffHandoverScreen({ societyId }: { societyId: string }) {
   const [query, setQuery] = useState("");
   const [reload, setReload] = useState(0);
   const [vacationStatuses, setVacationStatuses] = useState<Record<string, "active" | "clear" | "unknown">>({});
+  const [photoHeaders, setPhotoHeaders] = useState<Record<string, string> | undefined>();
   const processedRefreshRef = useRef(0);
 
   useEffect(
     () => (societyId ? subscribeToDispatchedPackages(societyId, setPackages) : undefined),
     [societyId],
   );
+
+  useEffect(() => {
+    void arrivalPhotoRequestHeaders(staffArrivalPhotoProxyUrl("preload"))
+      .then(setPhotoHeaders)
+      .catch(() => undefined);
+  }, []);
 
   const loadVacationStatuses = useCallback(async (rows: HubPackage[]) => {
     const residentIds = [...new Set(rows.map((pkg) => pkg.residentId).filter((id): id is string => Boolean(id)))];
@@ -131,17 +142,12 @@ export function StaffHandoverScreen({ societyId }: { societyId: string }) {
     }
     void getSocietyDispatchedPackages(societyId)
       .then((rows) => {
-        const fetchedRows = rows.filter(
-          (pkg) => pkg.status?.trim().toLowerCase() !== "delivered" && !pkg.deliveredAt,
-        );
+        const fetchedRows = rows.filter(isStaffOutForDelivery);
         // Keep packages just dispatched from Shelved/Runner that the API response may not include yet.
         const fetchedIds = new Set(fetchedRows.map((pkg) => pkg.id));
         const latestCache = getCachedDispatchedPackages(societyId) ?? cachedPackages ?? [];
         const pendingLocal = latestCache.filter(
-          (pkg) =>
-            !fetchedIds.has(pkg.id) &&
-            pkg.status?.trim().toLowerCase() === "dispatched" &&
-            !pkg.deliveredAt,
+          (pkg) => !fetchedIds.has(pkg.id) && isStaffOutForDelivery(pkg),
         );
         const dispatchedRows = [...fetchedRows, ...pendingLocal];
         setCachedDispatchedPackages(societyId, dispatchedRows);
@@ -183,38 +189,50 @@ export function StaffHandoverScreen({ societyId }: { societyId: string }) {
   ) : (
     <View style={styles.root}>
       <ScreenHeader title="Dispatched packages" subtitle="Tap a package to start handover" />
-      <ScrollView
+      <FlatList
+        data={loading || error || packages.length === 0 ? [] : filteredPackages}
+        keyExtractor={(pkg) => pkg.id}
         contentContainerStyle={styles.list}
         keyboardShouldPersistTaps="handled"
+        initialNumToRender={8}
+        maxToRenderPerBatch={8}
+        windowSize={7}
+        removeClippedSubviews
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}
-      >
-        <View style={styles.searchBox}>
-          <Ionicons name="search-outline" size={16} color="#94A3B8" />
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search resident, AWB, or flat number"
-            placeholderTextColor="#94A3B8"
-            style={styles.searchInput}
-            returnKeyType="search"
-            accessibilityLabel="Search handover packages by resident, AWB, or flat number"
-          />
-          {query.length > 0 ? (
-            <Pressable onPress={() => setQuery("")} hitSlop={8} accessibilityRole="button" accessibilityLabel="Clear search">
-              <Ionicons name="close-circle" size={17} color="#94A3B8" />
-            </Pressable>
-          ) : null}
-        </View>
-        {loading ? <ActivityIndicator color={colors.primary} style={styles.center} /> : error ? (
-          <View style={[CARD, styles.messageCard, styles.errorCard]}>
-            <Text style={styles.errorText}>{error}</Text>
-            <ActionLink label="Retry loading packages" icon="refresh-outline" onPress={refresh} />
+        ListHeaderComponent={
+          <View style={styles.searchBox}>
+            <Ionicons name="search-outline" size={16} color="#94A3B8" />
+            <TextInput
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Search resident, AWB, or flat number"
+              placeholderTextColor="#94A3B8"
+              style={styles.searchInput}
+              returnKeyType="search"
+              accessibilityLabel="Search handover packages by resident, AWB, or flat number"
+            />
+            {query.length > 0 ? (
+              <Pressable onPress={() => setQuery("")} hitSlop={8} accessibilityRole="button" accessibilityLabel="Clear search">
+                <Ionicons name="close-circle" size={17} color="#94A3B8" />
+              </Pressable>
+            ) : null}
           </View>
-        ) : packages.length === 0 ? (
-          <EmptyState icon="cube-outline" title="No packages awaiting handover" body="Dispatched packages for this society will appear here." />
-        ) : filteredPackages.length === 0 ? (
-          <EmptyState icon="search" title="No matching packages" body="Try a resident name, AWB number, or flat number." />
-        ) : filteredPackages.map((pkg) => {
+        }
+        ListEmptyComponent={
+          loading ? (
+            <ActivityIndicator color={colors.primary} style={styles.center} />
+          ) : error ? (
+            <View style={[CARD, styles.messageCard, styles.errorCard]}>
+              <Text style={styles.errorText}>{error}</Text>
+              <ActionLink label="Retry loading packages" icon="refresh-outline" onPress={refresh} />
+            </View>
+          ) : packages.length === 0 ? (
+            <EmptyState icon="cube-outline" title="No packages awaiting handover" body="Dispatched packages for this society will appear here." />
+          ) : (
+            <EmptyState icon="search" title="No matching packages" body="Try a resident name, AWB number, or flat number." />
+          )
+        }
+        renderItem={({ item: pkg }) => {
           const vacationStatus = pkg.residentId ? vacationStatuses[pkg.residentId] ?? "unknown" : "clear";
           const vacationActive = vacationStatus === "active";
           const holdUnverified = vacationStatus === "unknown";
@@ -222,51 +240,50 @@ export function StaffHandoverScreen({ societyId }: { societyId: string }) {
           // Vacation without collector blocks handover; authorized collector allows counter pickup.
           const disabled = (vacationActive && !hasCollector) || holdUnverified;
           return (
-          <Pressable
-            key={pkg.id}
-            disabled={disabled}
-            onPress={() => setSelected(pkg)}
-            accessibilityState={{ disabled }}
-            accessibilityLabel={
-              vacationActive && !hasCollector
-                ? `${pkg.recipientName || "Resident"} is on vacation hold`
-                : undefined
-            }
-            style={({ pressed }) => [CARD, styles.packageCard, disabled && styles.packageBlocked, pressed && !disabled && styles.pressed]}
-          >
-            <ArrivalPhotoThumb pkg={pkg} size={56} />
-            <View style={styles.packageInfo}>
-              <View style={styles.rowBetween}>
-                <Text style={styles.recipient} numberOfLines={1}>{pkg.recipientName || "Recipient"}</Text>
-                <Text style={styles.unit} numberOfLines={1}>{formatUnitLabel(pkg.tower, pkg.flat)}</Text>
+            <Pressable
+              disabled={disabled}
+              onPress={() => setSelected(pkg)}
+              accessibilityState={{ disabled }}
+              accessibilityLabel={
+                vacationActive && !hasCollector
+                  ? `${pkg.recipientName || "Resident"} is on vacation hold`
+                  : undefined
+              }
+              style={({ pressed }) => [CARD, styles.packageCard, disabled && styles.packageBlocked, pressed && !disabled && styles.pressed]}
+            >
+              <ArrivalPhotoThumb pkg={pkg} size={56} photoHeaders={photoHeaders} />
+              <View style={styles.packageInfo}>
+                <View style={styles.rowBetween}>
+                  <Text style={styles.recipient} numberOfLines={1}>{pkg.recipientName || "Recipient"}</Text>
+                  <Text style={styles.unit} numberOfLines={1}>{formatUnitLabel(pkg.tower, pkg.flat)}</Text>
+                </View>
+                <View style={styles.courierChip}>
+                  <Text style={styles.courier} numberOfLines={1}>{pkg.courier}</Text>
+                </View>
+                <Text style={styles.tracking} numberOfLines={1}>{pkg.tracking}</Text>
+                {pkg.weight ? <Text style={styles.weight}>{pkg.weight}</Text> : null}
+                {pkg.deliverySlotLabel ? <Text style={[styles.slot, pkg.deliverySlotStatus === "default" ? styles.defaultSlot : styles.bookedSlot]}>
+                  {pkg.deliverySlotStatus === "default" ? "Default door " : "Door "}{pkg.deliverySlotLabel}
+                </Text> : null}
+                {hasCollector ? (
+                  <Text style={styles.collectorBadge}>
+                    Collect: {pkg.authorizedCollectorName}
+                    {pkg.authorizedCollectorPhone ? ` · ${pkg.authorizedCollectorPhone}` : ""}
+                  </Text>
+                ) : null}
+                {vacationActive && !hasCollector ? (
+                  <Text style={styles.vacationHoldBadge}>Vacation hold active</Text>
+                ) : null}
+                {vacationActive && hasCollector ? (
+                  <Text style={styles.vacationHoldBadge}>Vacation hold — authorized collector OK</Text>
+                ) : null}
+                {holdUnverified ? <Text style={styles.vacationHoldChecking}>Checking vacation hold…</Text> : null}
               </View>
-              <View style={styles.courierChip}>
-                <Text style={styles.courier} numberOfLines={1}>{pkg.courier}</Text>
-              </View>
-              <Text style={styles.tracking} numberOfLines={1}>{pkg.tracking}</Text>
-              {pkg.weight ? <Text style={styles.weight}>{pkg.weight}</Text> : null}
-              {pkg.deliverySlotLabel ? <Text style={[styles.slot, pkg.deliverySlotStatus === "default" ? styles.defaultSlot : styles.bookedSlot]}>
-                {pkg.deliverySlotStatus === "default" ? "Default door " : "Door "}{pkg.deliverySlotLabel}
-              </Text> : null}
-              {hasCollector ? (
-                <Text style={styles.collectorBadge}>
-                  Collect: {pkg.authorizedCollectorName}
-                  {pkg.authorizedCollectorPhone ? ` · ${pkg.authorizedCollectorPhone}` : ""}
-                </Text>
-              ) : null}
-              {vacationActive && !hasCollector ? (
-                <Text style={styles.vacationHoldBadge}>Vacation hold active</Text>
-              ) : null}
-              {vacationActive && hasCollector ? (
-                <Text style={styles.vacationHoldBadge}>Vacation hold — authorized collector OK</Text>
-              ) : null}
-              {holdUnverified ? <Text style={styles.vacationHoldChecking}>Checking vacation hold…</Text> : null}
-            </View>
-            {!disabled ? <Ionicons name="chevron-forward" size={17} color="#D1D5DB" /> : null}
-          </Pressable>
+              {!disabled ? <Ionicons name="chevron-forward" size={17} color="#D1D5DB" /> : null}
+            </Pressable>
           );
-        })}
-      </ScrollView>
+        }}
+      />
     </View>
   );
 }

@@ -148,6 +148,11 @@ export function InboxPackageCard({ pkg, residentId, photoHeaders: sharedHeaders,
         ) : null}
 
         <View style={styles.chips}>
+          {(pkg.status ?? "Shelved") === "Dispatched" ? (
+            <Text style={styles.dispatchedChip}>Out for delivery</Text>
+          ) : (
+            <Text style={styles.shelvedChip}>Shelved</Text>
+          )}
           {pkg.isDamaged ? <Text style={styles.damageChip}>Damaged</Text> : null}
           {pkg.authorizedCollectorName ? (
             <Text style={styles.collectorChip}>Collector: {pkg.authorizedCollectorName}</Text>
@@ -217,6 +222,26 @@ const styles = StyleSheet.create({
   shelfCollect: { fontSize: 11, fontWeight: "700", color: "#374151" },
   shelfDetail: { marginTop: 1, fontSize: 10, color: "#9CA3AF" },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 6 },
+  shelvedChip: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: colors.primary,
+    backgroundColor: "#E8EEF4",
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    overflow: "hidden",
+  },
+  dispatchedChip: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#B45309",
+    backgroundColor: "#FEF3C7",
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    overflow: "hidden",
+  },
   damageChip: {
     fontSize: 10,
     fontWeight: "800",

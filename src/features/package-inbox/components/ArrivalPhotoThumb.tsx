@@ -10,12 +10,14 @@ import {
 type Props = {
   pkg: Pick<HubPackage, "id" | "hasArrivalPhoto" | "arrivalPhotoUrl">;
   size?: number;
+  /** Pre-resolved once for the list — avoids N× auth-header work before Image mounts. */
+  photoHeaders?: Record<string, string>;
 };
 
 /** Gated thumbnail — only requests image bytes when hasArrivalPhoto is true. */
-export function ArrivalPhotoThumb({ pkg, size = 64 }: Props) {
+export function ArrivalPhotoThumb({ pkg, size = 64, photoHeaders: sharedHeaders }: Props) {
   const [photoUrl, setPhotoUrl] = useState<string | undefined>();
-  const [photoHeaders, setPhotoHeaders] = useState<Record<string, string> | undefined>();
+  const [photoHeaders, setPhotoHeaders] = useState<Record<string, string> | undefined>(sharedHeaders);
   const [photoFailed, setPhotoFailed] = useState(false);
 
   useEffect(() => {
@@ -29,6 +31,11 @@ export function ArrivalPhotoThumb({ pkg, size = 64 }: Props) {
       setPhotoHeaders(undefined);
       return;
     }
+    if (sharedHeaders) {
+      setPhotoUrl(url);
+      setPhotoHeaders(sharedHeaders);
+      return;
+    }
     void (async () => {
       const headers = await arrivalPhotoRequestHeaders(url);
       if (!active) return;
@@ -38,7 +45,7 @@ export function ArrivalPhotoThumb({ pkg, size = 64 }: Props) {
     return () => {
       active = false;
     };
-  }, [pkg.arrivalPhotoUrl, pkg.hasArrivalPhoto, pkg.id]);
+  }, [pkg.arrivalPhotoUrl, pkg.hasArrivalPhoto, pkg.id, sharedHeaders]);
 
   const box = { width: size, height: size, borderRadius: Math.max(8, Math.round(size * 0.14)) };
 

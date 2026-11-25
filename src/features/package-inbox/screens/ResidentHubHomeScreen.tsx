@@ -14,6 +14,7 @@ import {
   isResidentPackagesCacheFresh,
   setCachedResidentPackages,
 } from "@/features/package-inbox/services/residentPackageCache";
+import { isResidentInboxPackage } from "@/features/package-inbox/utils/residentPackageStatus";
 import {
   getResidentHistory,
   getResidentPackages,
@@ -95,12 +96,9 @@ export function ResidentHubHomeScreen() {
     }, [session?.residentId]),
   );
 
+  // Match Inbox: Shelved + Dispatched (everything before Delivered).
   const awaitingCount = useMemo(
-    () =>
-      packages.filter((pkg) => {
-        const status = pkg.status ?? "Shelved";
-        return status === "Shelved" || status === "Dispatched";
-      }).length,
+    () => packages.filter(isResidentInboxPackage).length,
     [packages],
   );
 
@@ -143,7 +141,7 @@ export function ResidentHubHomeScreen() {
       <HubTileRow>
         <HubTile
           title="My packages"
-          subtitle="Waiting at hub"
+          subtitle="Before delivery"
           icon="cube-outline"
           count={awaitingCount}
           onPress={() => navigation.navigate("Packages")}
