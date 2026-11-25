@@ -662,6 +662,30 @@ function MethodOption({ label, selected, onPress }: { label: string; selected: b
   );
 }
 
+/** First + last name initials for avatar circles (e.g. "John Richard" → "JR"). */
+function recipientInitials(fullName?: string | null): string {
+  const parts = fullName?.trim().split(/\s+/).filter(Boolean) ?? [];
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0] ?? ""}${parts[parts.length - 1][0] ?? ""}`.toUpperCase();
+}
+
+function RecipientInitialsAvatar({ name, size = 44 }: { name?: string | null; size?: number }) {
+  return (
+    <View
+      style={[
+        styles.initialsAvatar,
+        { width: size, height: size, borderRadius: size / 2 },
+      ]}
+      accessibilityLabel={name ? `Avatar for ${name}` : "Recipient avatar"}
+    >
+      <Text style={[styles.initialsText, { fontSize: Math.round(size * 0.36) }]}>
+        {recipientInitials(name)}
+      </Text>
+    </View>
+  );
+}
+
 export function StaffDoneScreen({ societyId }: { societyId: string }) {
   const [packages, setPackages] = useState<HubPackage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -702,6 +726,7 @@ export function StaffDoneScreen({ societyId }: { societyId: string }) {
         ) : packages.map((pkg) => (
           <View key={pkg.id} style={[CARD, styles.deliveredCard]}>
             <View style={styles.deliveredHeader}>
+              <RecipientInitialsAvatar name={pkg.recipientName} />
               <View style={styles.packageInfo}>
                 <View style={styles.rowBetween}>
                   <Text style={styles.recipient} numberOfLines={1}>{pkg.recipientName || "Recipient"}</Text>
@@ -897,7 +922,14 @@ const styles = StyleSheet.create({
   photoPreview: { width: "100%", height: 140, borderRadius: 10, backgroundColor: "#E5E7EB" },
   photoActions: { flexDirection: "row", gap: 8 },
   deliveredCard: { borderColor: "#6EE7B7", padding: 12, borderRadius: 13, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
-  deliveredHeader: { flexDirection: "row", gap: 8, marginBottom: 8 },
+  deliveredHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 8 },
+  initialsAvatar: {
+    backgroundColor: "#3B82F6",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  initialsText: { color: "#FFFFFF", fontWeight: "700", letterSpacing: 0.3 },
   deliveredBadge: { minHeight: 34, backgroundColor: "#ECFDF5", borderRadius: 9, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingHorizontal: 8 },
   deliveredText: { color: "#059669", fontSize: 10, fontWeight: "800" },
 });
