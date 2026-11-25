@@ -10,6 +10,11 @@ import {
   getResidentSession,
 } from "@/features/authentication/services/sessionStorage";
 import {
+  getCachedResidentPackages,
+  isResidentPackagesCacheFresh,
+  setCachedResidentPackages,
+} from "@/features/package-inbox/services/residentPackageCache";
+import {
   getResidentHistory,
   getResidentPackages,
   getSocieties,
@@ -62,10 +67,21 @@ export function ResidentHubHomeScreen() {
     useCallback(() => {
       if (!session?.residentId) return;
       let active = true;
+      const residentId = session.residentId;
+      const cached = getCachedResidentPackages(residentId);
+      if (cached) setPackages(cached);
+
+      const packagesPromise = isResidentPackagesCacheFresh(residentId) && cached
+        ? Promise.resolve(cached)
+        : getResidentPackages(residentId).then((rows) => {
+            setCachedResidentPackages(residentId, rows);
+            return rows;
+          });
+
       // Inbox packages exclude Delivered — history count needs the dedicated endpoint.
       void Promise.all([
-        getResidentPackages(session.residentId),
-        getResidentHistory(session.residentId).catch(() => []),
+        packagesPromise,
+        getResidentHistory(residentId).catch(() => []),
       ])
         .then(([rows, history]) => {
           if (!active) return;

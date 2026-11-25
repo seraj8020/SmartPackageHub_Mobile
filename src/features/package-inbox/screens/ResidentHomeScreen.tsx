@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  FlatList,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -19,8 +19,15 @@ import { getResidentSession } from "@/features/authentication/services/sessionSt
 import { CodApprovalDialog } from "@/features/package-inbox/components/CodApprovalDialog";
 import { InboxPackageCard } from "@/features/package-inbox/components/InboxPackageCard";
 import {
+  getCachedResidentPackages,
+  isResidentPackagesCacheFresh,
+  setCachedResidentPackages,
+} from "@/features/package-inbox/services/residentPackageCache";
+import {
+  arrivalPhotoRequestHeaders,
   getResidentPackages,
   getSocieties,
+  residentArrivalPhotoProxyUrl,
   type HubPackage,
 } from "@/shared/services/packageApi";
 import { colors } from "@/shared/theme/colors";
@@ -42,6 +49,7 @@ export function ResidentHomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [dismissedCodIds, setDismissedCodIds] = useState<Set<string>>(new Set());
+  const [photoHeaders, setPhotoHeaders] = useState<Record<string, string> | undefined>();
 
   const inboxPackages = useMemo(
     () =>
@@ -83,7 +91,6 @@ export function ResidentHomeScreen() {
   const load = useCallback(
     async (isRefresh = false) => {
       if (isRefresh) setRefreshing(true);
-      else setLoading(true);
       try {
         const stored = await getResidentSession();
         if (!stored) {
@@ -91,6 +98,22 @@ export function ResidentHomeScreen() {
           return;
         }
         setSession(stored);
+
+        const cached = getCachedResidentPackages(stored.residentId);
+        const cacheFresh = isResidentPackagesCacheFresh(stored.residentId);
+        // Stale-while-revalidate: show cache immediately, only spinner on cold start.
+        if (cached && cached.length >= 0) {
+          setPackages(cached);
+          setLoading(false);
+        } else if (!isRefresh) {
+          setLoading(true);
+        }
+
+        if (cacheFresh && !isRefresh && cached) {
+          setLoadError(null);
+          return;
+        }
+
         const [societies, pkgs] = await Promise.all([
           getSocieties().catch(() => []),
           getResidentPackages(stored.residentId),
@@ -98,6 +121,7 @@ export function ResidentHomeScreen() {
         const match = societies.find((item) => item.id === stored.societyId);
         setSocietyName(match?.name ?? "");
         setPackages(pkgs);
+        setCachedResidentPackages(stored.residentId, pkgs);
         setLoadError(null);
       } catch (cause) {
         setLoadError(cause instanceof Error ? cause.message : "Unable to load packages. Try again.");
@@ -109,25 +133,26 @@ export function ResidentHomeScreen() {
     [navigation],
   );
 
+  useEffect(() => {
+    // Resolve auth headers once for all arrival thumbs on this screen.
+    void arrivalPhotoRequestHeaders(
+      residentArrivalPhotoProxyUrl("preload", "preload"),
+    )
+      .then(setPhotoHeaders)
+      .catch(() => undefined);
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       void load();
-      // Keep inbox (and bell badge) in sync when staff shelves a package while this screen is open.
+      // Single poller — faster while COD is pending, otherwise soft refresh.
+      const intervalMs = pendingCodCount > 0 ? 8000 : 20000;
       const timer = setInterval(() => {
         void load(true);
-      }, 10000);
+      }, intervalMs);
       return () => clearInterval(timer);
-    }, [load]),
+    }, [load, pendingCodCount]),
   );
-
-  useEffect(() => {
-    // Faster poll while COD approval is outstanding.
-    if (pendingCodCount === 0) return;
-    const timer = setInterval(() => {
-      void load(true);
-    }, 5000);
-    return () => clearInterval(timer);
-  }, [pendingCodCount, load]);
 
   return (
     <View style={styles.root}>
@@ -202,51 +227,59 @@ export function ResidentHomeScreen() {
         </View>
       </View>
 
-      <ScrollView
+      <FlatList
+        data={loading && inboxPackages.length === 0 ? [] : inboxPackages}
+        keyExtractor={(pkg) => pkg.id}
         contentContainerStyle={styles.list}
+        initialNumToRender={8}
+        maxToRenderPerBatch={8}
+        windowSize={7}
+        removeClippedSubviews
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} />
         }
-      >
-        <Text style={styles.sectionTitle}>Shelved at the Hub</Text>
-        <Text style={styles.sectionHint}>
-          Arrival photo on each card · tap a package for details, authorize collector, or book delivery
-        </Text>
-
-        {!loading && loadError && inboxPackages.length > 0 ? (
-          <Pressable style={styles.loadError} onPress={() => void load(true)}>
-            <Text style={styles.loadErrorText}>Couldn’t refresh packages. Tap to retry.</Text>
-          </Pressable>
-        ) : null}
-
-        {loading ? (
-          <ActivityIndicator color={colors.primary} style={{ marginTop: 24 }} />
-        ) : loadError && inboxPackages.length === 0 ? (
-          <Pressable style={styles.loadErrorEmpty} onPress={() => void load(true)}>
-            <Ionicons name="cloud-offline-outline" size={23} color="#9CA3AF" />
-            <Text style={styles.emptyTitle}>Couldn’t load packages</Text>
-            <Text style={styles.emptyBody}>{loadError}</Text>
-            <Text style={styles.loadErrorAction}>Tap to try again</Text>
-          </Pressable>
-        ) : inboxPackages.length === 0 ? (
-          <View style={styles.empty}>
-            <Ionicons name="cube-outline" size={22} color="#D1D5DB" />
-            <Text style={styles.emptyTitle}>No shelved packages yet</Text>
-            <Text style={styles.emptyBody}>
-              Packages show here after hub staff assigns a shelf.
+        ListHeaderComponent={
+          <View>
+            <Text style={styles.sectionTitle}>Shelved at the Hub</Text>
+            <Text style={styles.sectionHint}>
+              Arrival photo on each card · tap a package for details, authorize collector, or book delivery
             </Text>
+            {!loading && loadError && inboxPackages.length > 0 ? (
+              <Pressable style={styles.loadError} onPress={() => void load(true)}>
+                <Text style={styles.loadErrorText}>Couldn’t refresh packages. Tap to retry.</Text>
+              </Pressable>
+            ) : null}
           </View>
-        ) : (
-          inboxPackages.map((pkg) => (
-            <InboxPackageCard
-              key={pkg.id}
-              pkg={pkg}
-              residentId={session?.residentId ?? ""}
-              onPress={() => navigation.navigate("PackageDetail", { pkg })}
-            />
-          ))
+        }
+        ListEmptyComponent={
+          loading ? (
+            <ActivityIndicator color={colors.primary} style={{ marginTop: 24 }} />
+          ) : loadError ? (
+            <Pressable style={styles.loadErrorEmpty} onPress={() => void load(true)}>
+              <Ionicons name="cloud-offline-outline" size={23} color="#9CA3AF" />
+              <Text style={styles.emptyTitle}>Couldn’t load packages</Text>
+              <Text style={styles.emptyBody}>{loadError}</Text>
+              <Text style={styles.loadErrorAction}>Tap to try again</Text>
+            </Pressable>
+          ) : (
+            <View style={styles.empty}>
+              <Ionicons name="cube-outline" size={22} color="#D1D5DB" />
+              <Text style={styles.emptyTitle}>No shelved packages yet</Text>
+              <Text style={styles.emptyBody}>
+                Packages show here after hub staff assigns a shelf.
+              </Text>
+            </View>
+          )
+        }
+        renderItem={({ item: pkg }) => (
+          <InboxPackageCard
+            pkg={pkg}
+            residentId={session?.residentId ?? ""}
+            photoHeaders={photoHeaders}
+            onPress={() => navigation.navigate("PackageDetail", { pkg })}
+          />
         )}
-      </ScrollView>
+      />
     </View>
   );
 }

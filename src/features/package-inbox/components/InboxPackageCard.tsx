@@ -16,6 +16,8 @@ import {
 type Props = {
   pkg: HubPackage;
   residentId: string;
+  /** Pre-resolved once for the list — avoids N× SecureStore reads per card. */
+  photoHeaders?: Record<string, string>;
   onPress: () => void;
 };
 
@@ -44,12 +46,12 @@ function preferenceChip(pkg: HubPackage): { text: string; styleKey: "violet" | "
   return null;
 }
 
-export function InboxPackageCard({ pkg, residentId, onPress }: Props) {
+export function InboxPackageCard({ pkg, residentId, photoHeaders: sharedHeaders, onPress }: Props) {
   const pref = preferenceChip(pkg);
   const collect = shelfCollectLabel(pkg);
   const shelfDetail = shelfLocationDetail(pkg);
   const [photoUrl, setPhotoUrl] = useState<string | undefined>();
-  const [photoHeaders, setPhotoHeaders] = useState<Record<string, string> | undefined>();
+  const [photoHeaders, setPhotoHeaders] = useState<Record<string, string> | undefined>(sharedHeaders);
   const [photoFailed, setPhotoFailed] = useState(false);
 
   useEffect(() => {
@@ -66,6 +68,12 @@ export function InboxPackageCard({ pkg, residentId, onPress }: Props) {
       setPhotoHeaders(undefined);
       return;
     }
+    // Prefer list-level headers; fall back once if parent has not resolved yet.
+    if (sharedHeaders) {
+      setPhotoUrl(url);
+      setPhotoHeaders(sharedHeaders);
+      return;
+    }
     void (async () => {
       const headers = await arrivalPhotoRequestHeaders(url);
       if (!active) return;
@@ -75,7 +83,7 @@ export function InboxPackageCard({ pkg, residentId, onPress }: Props) {
     return () => {
       active = false;
     };
-  }, [pkg.arrivalPhotoUrl, pkg.hasArrivalPhoto, pkg.id, residentId]);
+  }, [pkg.arrivalPhotoUrl, pkg.hasArrivalPhoto, pkg.id, residentId, sharedHeaders]);
 
   const tracking =
     (pkg.courierAwb?.trim() || pkg.tracking?.trim() || pkg.trackingNumber?.trim() || "").trim();
