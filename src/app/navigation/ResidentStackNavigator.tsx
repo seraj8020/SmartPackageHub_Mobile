@@ -6,6 +6,7 @@ import { ResidentPackageDetailScreen } from "@/features/package-inbox/screens/Re
 import { ResidentHistoryScreen } from "@/features/package-inbox/screens/ResidentHistoryScreen";
 import { ResidentProfileScreen } from "@/features/package-inbox/screens/ResidentProfileScreen";
 import { DoorDeliverySlotScreen } from "@/features/delivery-slots/screens/DoorDeliverySlotScreen";
+import { AuthorizeCollectorScreen } from "@/features/authorized-collector/screens/AuthorizeCollectorScreen";
 import { VacationHoldScreen } from "@/features/vacation-hold/screens/VacationHoldScreen";
 import { colors } from "@/shared/theme/colors";
 import { hubColors } from "@/shared/ui/hub/hubTheme";
@@ -39,6 +40,11 @@ export function ResidentStackNavigator() {
         options={{ ...detailScreenOptions, title: "My packages" }}
       />
       <Stack.Screen name="PackageDetail" component={ResidentPackageDetailScreen} options={{ ...detailScreenOptions, title: "Package detail" }} />
+      <Stack.Screen
+        name="AuthorizeCollector"
+        component={AuthorizeCollectorScreen}
+        options={{ ...detailScreenOptions, title: "Authorize collector", headerBackTitle: "Package" }}
+      />
       <Stack.Screen name="History" component={ResidentHistoryScreen} options={{ ...detailScreenOptions, title: "History" }} />
       <Stack.Screen
         name="Vacation"
@@ -49,7 +55,7 @@ export function ResidentStackNavigator() {
       <Stack.Screen
         name="DeliveryPreference"
         component={DoorDeliverySlotScreen}
-        options={{ ...detailScreenOptions, title: "Delivery preference", headerBackTitle: "My packages" }}
+        options={{ ...detailScreenOptions, title: "Delivery preference", headerBackTitle: "Package" }}
       />
     </Stack.Navigator>
   );

@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -16,10 +14,6 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { ResidentStackParamList } from "@/app/navigation/types";
 import { getResidentSession } from "@/features/authentication/services/sessionStorage";
-import {
-  authorizePackageCollector,
-  revokePackageCollector,
-} from "@/features/authorized-collector/services/packageConnectApi";
 import {
   arrivalPhotoRequestHeaders,
   damagePhotoRequestHeaders,
@@ -86,12 +80,6 @@ export function ResidentPackageDetailScreen({ route }: Props) {
   const [damageHeaders, setDamageHeaders] = useState<Record<string, string> | undefined>();
   const [retryingArrival, setRetryingArrival] = useState(false);
   const [retryingDamage, setRetryingDamage] = useState(false);
-  const [collectorName, setCollectorName] = useState("");
-  const [collectorPhone, setCollectorPhone] = useState("");
-  const [collectorNote, setCollectorNote] = useState("");
-  const [actionBusy, setActionBusy] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [residentId, setResidentId] = useState<string | null>(null);
 
   const reloadDetail = useCallback(async (ownerId: string) => {
     const result = await getResidentPackageDetail(ownerId, pkg.id);
@@ -106,9 +94,6 @@ export function ResidentPackageDetailScreen({ route }: Props) {
     );
     setArrivalFailed(false);
     setDamageFailed(Boolean(result.isDamaged && !result.damagePhotoUrl));
-    setCollectorName(result.authorizedCollectorName ?? "");
-    setCollectorPhone(result.authorizedCollectorPhone ?? "");
-    setCollectorNote(result.authorizedCollectorNote ?? "");
   }, [pkg.id]);
 
   useEffect(() => {
@@ -123,14 +108,10 @@ export function ResidentPackageDetailScreen({ route }: Props) {
           setDamageHeaders(pkg.damagePhotoUrl ? await damagePhotoRequestHeaders(pkg.damagePhotoUrl) : undefined);
           setArrivalFailed(false);
           setDamageFailed(Boolean(pkg.isDamaged && !pkg.damagePhotoUrl));
-          setCollectorName(pkg.authorizedCollectorName ?? "");
-          setCollectorPhone(pkg.authorizedCollectorPhone ?? "");
-          setCollectorNote(pkg.authorizedCollectorNote ?? "");
           setLoading(false);
         }
         return;
       }
-      setResidentId(session.residentId);
       try {
         if (!active) return;
         await reloadDetail(session.residentId);
@@ -189,48 +170,6 @@ export function ResidentPackageDetailScreen({ route }: Props) {
     Boolean(arrivalUrl) || arrivalFailed || Boolean(current.hasArrivalPhoto);
   const showDamage = Boolean(current.isDamaged);
   const hasCollector = Boolean(current.authorizedCollectorName);
-  const canAct = Boolean(residentId) && !actionBusy;
-
-  async function onAuthorizeCollector() {
-    if (!residentId) return;
-    const name = collectorName.trim();
-    if (!name) {
-      setActionError("Enter the collector's name.");
-      return;
-    }
-    setActionBusy(true);
-    setActionError(null);
-    try {
-      await authorizePackageCollector(residentId, pkg.id, {
-        collectorName: name,
-        collectorPhone: collectorPhone.trim() || undefined,
-        note: collectorNote.trim() || undefined,
-      });
-      await reloadDetail(residentId);
-      Alert.alert("Collector authorized", `${name} can collect this package at the hub.`);
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Unable to authorize collector.");
-    } finally {
-      setActionBusy(false);
-    }
-  }
-
-  async function onRevokeCollector() {
-    if (!residentId) return;
-    setActionBusy(true);
-    setActionError(null);
-    try {
-      await revokePackageCollector(residentId, pkg.id);
-      setCollectorName("");
-      setCollectorPhone("");
-      setCollectorNote("");
-      await reloadDetail(residentId);
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Unable to revoke collector.");
-    } finally {
-      setActionBusy(false);
-    }
-  }
 
   return (
     <View style={styles.root}>
@@ -276,67 +215,29 @@ export function ResidentPackageDetailScreen({ route }: Props) {
           />
         ) : null}
 
-        {!loading ? (
-          <View style={styles.connectSection}>
-            <Text style={styles.sectionTitle}>Authorize collector</Text>
+        {!loading && hasCollector ? (
+          <View style={styles.collectorSummary}>
+            <Text style={styles.sectionTitle}>Authorized collector</Text>
             <View style={styles.card}>
-              <Text style={styles.connectBody}>
-                Going out of town or busy? Let a neighbour, family member, or guest collect this package at the hub on your behalf.
+              <Text style={styles.collectorActive}>
+                {current.authorizedCollectorName}
+                {current.authorizedCollectorPhone ? ` · ${current.authorizedCollectorPhone}` : ""}
               </Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Collector full name"
-                placeholderTextColor="#94A3B8"
-                value={collectorName}
-                onChangeText={setCollectorName}
-                editable={canAct}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Phone (optional)"
-                placeholderTextColor="#94A3B8"
-                keyboardType="phone-pad"
-                value={collectorPhone}
-                onChangeText={setCollectorPhone}
-                editable={canAct}
-              />
-              <TextInput
-                style={[styles.input, styles.inputMultiline]}
-                placeholder="Note for staff (optional)"
-                placeholderTextColor="#94A3B8"
-                value={collectorNote}
-                onChangeText={setCollectorNote}
-                editable={canAct}
-                multiline
-              />
-              {hasCollector ? (
-                <Text style={styles.collectorActive}>
-                  Active: {current.authorizedCollectorName}
-                  {current.authorizedCollectorPhone ? ` · ${current.authorizedCollectorPhone}` : ""}
-                </Text>
-              ) : null}
-              <Pressable
-                style={[styles.primaryButton, !canAct && styles.buttonDisabled]}
-                disabled={!canAct}
-                onPress={() => void onAuthorizeCollector()}
-              >
-                <Text style={styles.primaryButtonText}>
-                  {hasCollector ? "Update authorized collector" : "Authorize collector"}
-                </Text>
-              </Pressable>
-              {hasCollector ? (
-                <Pressable
-                  style={[styles.secondaryButton, !canAct && styles.buttonDisabled]}
-                  disabled={!canAct}
-                  onPress={() => void onRevokeCollector()}
-                >
-                  <Text style={styles.secondaryButtonText}>Revoke collector</Text>
-                </Pressable>
+              {current.authorizedCollectorNote ? (
+                <Text style={styles.note}>{current.authorizedCollectorNote}</Text>
               ) : null}
             </View>
-            {actionError ? <Text style={styles.actionError}>{actionError}</Text> : null}
           </View>
         ) : null}
+
+        <Pressable
+          style={styles.primaryAction}
+          onPress={() => navigation.navigate("AuthorizeCollector", { pkg: current })}
+        >
+          <Text style={styles.primaryActionText}>
+            {hasCollector ? "Manage authorized collector" : "Authorize someone to collect"}
+          </Text>
+        </Pressable>
 
         <Pressable
           style={styles.deliveryButton}
@@ -368,6 +269,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     gap: 8,
+    flexWrap: "wrap",
   },
   status: {
     color: "#1551BA",
@@ -416,7 +318,7 @@ const styles = StyleSheet.create({
   },
   loading: { marginTop: 20 },
   damageSection: { marginTop: 16 },
-  connectSection: { marginTop: 16 },
+  collectorSummary: { marginTop: 16 },
   sectionTitle: {
     marginHorizontal: 16,
     marginBottom: 1,
@@ -426,65 +328,23 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     textTransform: "uppercase",
   },
-  connectBody: { color: colors.textMuted, fontSize: 12, lineHeight: 17, marginBottom: 10 },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: colors.text,
-    marginBottom: 8,
-    backgroundColor: "#F8FAFC",
-  },
-  inputMultiline: { minHeight: 64, textAlignVertical: "top" },
-  collectorActive: {
-    color: "#166534",
-    backgroundColor: "#F0FDF4",
-    borderColor: "#BBF7D0",
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    fontSize: 12,
-    fontWeight: "700",
-    marginBottom: 10,
-  },
-  primaryButton: {
-    minHeight: 44,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.primary,
-    marginTop: 4,
-  },
-  primaryButtonText: { color: "#fff", fontWeight: "800", fontSize: 14 },
-  secondaryButton: {
-    minHeight: 42,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginTop: 8,
-    backgroundColor: "#fff",
-  },
-  secondaryButtonText: { color: "#B91C1C", fontWeight: "700", fontSize: 13 },
-  buttonDisabled: { opacity: 0.5 },
-  actionError: {
-    marginHorizontal: 16,
-    marginTop: 8,
-    color: "#B91C1C",
-    fontSize: 12,
-    fontWeight: "600",
-  },
+  collectorActive: { color: "#166534", fontSize: 13, fontWeight: "700" },
   photo: { width: "100%", height: 220, borderRadius: 10, backgroundColor: "#E7EBEF", marginBottom: 8 },
   placeholder: { alignItems: "center", justifyContent: "center", padding: 6 },
   placeholderText: { color: "#697586", fontSize: 9, textAlign: "center", marginTop: 2 },
   retry: { paddingVertical: 6, paddingHorizontal: 8 },
   retryText: { color: colors.primary, fontSize: 11, fontWeight: "700" },
-  note: { color: colors.textMuted, fontSize: 11, lineHeight: 16, marginTop: 6, fontFamily: "monospace" },
+  note: { color: colors.textMuted, fontSize: 11, lineHeight: 16, marginTop: 6 },
+  primaryAction: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    minHeight: 46,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 13,
+    backgroundColor: colors.primary,
+  },
+  primaryActionText: { color: "#fff", fontWeight: "800", fontSize: 14 },
   deliveryButton: {
     marginHorizontal: 16,
     marginTop: 10,

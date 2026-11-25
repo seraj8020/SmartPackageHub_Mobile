@@ -210,7 +210,7 @@ export function ResidentHomeScreen() {
       >
         <Text style={styles.sectionTitle}>Shelved at the Hub</Text>
         <Text style={styles.sectionHint}>
-          Arrival photo on each card · tap a package to book a delivery slot
+          Arrival photo on each card · tap a package for details, authorize collector, or book delivery
         </Text>
 
         {!loading && loadError && inboxPackages.length > 0 ? (
@@ -242,7 +242,7 @@ export function ResidentHomeScreen() {
               key={pkg.id}
               pkg={pkg}
               residentId={session?.residentId ?? ""}
-              onPress={() => navigation.navigate("DeliveryPreference", { pkg })}
+              onPress={() => navigation.navigate("PackageDetail", { pkg })}
             />
           ))
         )}
