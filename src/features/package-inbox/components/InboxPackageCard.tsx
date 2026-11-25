@@ -77,8 +77,17 @@ export function InboxPackageCard({ pkg, residentId, onPress }: Props) {
     };
   }, [pkg.arrivalPhotoUrl, pkg.hasArrivalPhoto, pkg.id, residentId]);
 
-  const title =
-    pkg.pkgNumber || pkg.tracking || pkg.trackingNumber || pkg.recipientName || "Package";
+  const tracking =
+    (pkg.courierAwb?.trim() || pkg.tracking?.trim() || pkg.trackingNumber?.trim() || "").trim();
+  const trackingLabel = pkg.courierAwb?.trim()
+    ? `AWB ${pkg.courierAwb.trim()}`
+    : tracking
+      ? `Tracking ${tracking}`
+      : null;
+  const dims =
+    pkg.lengthCm || pkg.widthCm || pkg.heightCm
+      ? `${pkg.lengthCm ?? "—"} × ${pkg.widthCm ?? "—"} × ${pkg.heightCm ?? "—"} cm`
+      : null;
 
   return (
     <Pressable style={styles.card} onPress={onPress}>
@@ -105,14 +114,21 @@ export function InboxPackageCard({ pkg, residentId, onPress }: Props) {
           <Text style={styles.receivedAt}>{formatDisplayTimestamp(pkg.receivedAt)}</Text>
         </View>
 
-        <Text style={styles.title} numberOfLines={1}>
-          {title}
-        </Text>
+        {trackingLabel ? (
+          <Text style={styles.title} numberOfLines={1}>
+            {trackingLabel}
+          </Text>
+        ) : (
+          <Text style={styles.title} numberOfLines={1}>
+            {pkg.recipientName || "Package"}
+          </Text>
+        )}
 
-        {(pkg.category || pkg.weight) ? (
-          <Text style={styles.meta} numberOfLines={1}>
-            {pkg.category}
-            {pkg.weight ? ` · ${pkg.weight}` : ""}
+        {(pkg.category || pkg.weight || dims) ? (
+          <Text style={styles.meta} numberOfLines={2}>
+            {[pkg.category, pkg.weight || null, dims ? `Dims ${dims}` : null]
+              .filter(Boolean)
+              .join(" · ")}
           </Text>
         ) : null}
 

@@ -186,6 +186,7 @@ export function StaffHomeScreen() {
           title="Handover"
           subtitle="OTP / POD"
           icon="hand-left-outline"
+          count={dispatchedCount}
           onPress={() => navigation.navigate("Hand")}
         />
       </HubTileRow>

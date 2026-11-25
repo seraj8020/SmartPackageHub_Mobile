@@ -134,7 +134,10 @@ function DoorDeliverySlotBody({
       >
         <View style={styles.card}>
           <Text style={styles.courier}>{selectedPackage.courier ?? "Courier"}</Text>
-          <Text style={styles.tracking}>{packageTracking(selectedPackage)}</Text>
+          <Text style={styles.packageNumber}>{packageNumberLabel(selectedPackage)}</Text>
+          {packageTrackingHint(selectedPackage) ? (
+            <Text style={styles.tracking}>{packageTrackingHint(selectedPackage)}</Text>
+          ) : null}
           {selectedPackage.preferredDeliveryMethod ? (
             <Text style={styles.currentPref}>
               Current preference:{" "}
@@ -287,8 +290,17 @@ function DoorDeliverySlotBody({
   );
 }
 
-function packageTracking(pkg: Props["route"]["params"]["pkg"]) {
-  return pkg.tracking || pkg.trackingNumber || pkg.pkgNumber || "Package";
+function packageNumberLabel(pkg: Props["route"]["params"]["pkg"]) {
+  const number = pkg.pkgNumber?.trim();
+  return number ? `Package ${number}` : "Package";
+}
+
+function packageTrackingHint(pkg: Props["route"]["params"]["pkg"]) {
+  const awb = pkg.courierAwb?.trim();
+  if (awb) return `AWB ${awb}`;
+  const tracking = (pkg.tracking || pkg.trackingNumber || "").trim();
+  if (tracking && tracking !== "—") return `Tracking ${tracking}`;
+  return null;
 }
 
 const styles = StyleSheet.create({
@@ -304,6 +316,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   courier: { fontSize: 12, fontWeight: "700", color: colors.primary },
+  packageNumber: { fontSize: 15, fontWeight: "800", color: colors.text },
   tracking: { fontSize: 12, color: "#9CA3AF" },
   currentPref: {
     marginTop: 4,

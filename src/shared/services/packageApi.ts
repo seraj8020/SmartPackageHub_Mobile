@@ -17,12 +17,18 @@ export interface HubPackage {
   tracking: string;
   /** Alias used by older mobile screens. */
   trackingNumber?: string;
+  /** Courier AWB / airway bill when distinct from SPH tracking. */
+  courierAwb?: string;
   tower?: string;
   towerWing?: string;
   floor?: number;
   flat: string;
   flatNumber?: string;
   weight: string;
+  /** Package dimensions in cm (from intake OCR / staff entry). */
+  lengthCm?: number;
+  widthCm?: number;
+  heightCm?: number;
   receivedAt: string;
   deliveredAt?: string;
   category: string;
@@ -156,14 +162,25 @@ function damageFields(row: Record<string, unknown>) {
   return { isDamaged, damageNote, damagePhotoUrl, arrivalPhotoUrl };
 }
 
+function positiveDimension(row: Record<string, unknown>, ...keys: string[]): number | undefined {
+  for (const key of keys) {
+    const raw = row[key];
+    const value = typeof raw === "number" ? raw : Number(raw);
+    if (Number.isFinite(value) && value > 0) return value;
+  }
+  return undefined;
+}
+
 export function toHubPackage(row: Record<string, unknown>): HubPackage {
   const tower = textOf(row, "towerWing", "TowerWing", "tower", "Tower");
   const flat = textOf(row, "flatNumber", "FlatNumber", "flat", "Flat");
   const floorValue = row.floor ?? row.Floor;
   const weight = textOf(row, "weight", "Weight");
+  const pkgNumber = textOf(row, "pkgNumber", "PkgNumber") || undefined;
   const tracking =
-    textOf(row, "tracking", "Tracking", "trackingNumber", "TrackingNumber", "pkgNumber", "PkgNumber") ||
+    textOf(row, "tracking", "Tracking", "trackingNumber", "TrackingNumber") ||
     "—";
+  const courierAwb = textOf(row, "courierAwb", "CourierAwb", "awb", "Awb") || undefined;
   const isCodRaw = row.isCod ?? row.IsCod;
   const codAmountRaw = row.codAmount ?? row.CodAmount;
   const damage = damageFields(row);
@@ -175,12 +192,16 @@ export function toHubPackage(row: Record<string, unknown>): HubPackage {
     courier: textOf(row, "courier", "Courier", "courierPartner") || "Courier",
     tracking,
     trackingNumber: tracking,
+    courierAwb,
     tower: tower || undefined,
     towerWing: tower || undefined,
     floor: typeof floorValue === "number" && Number.isFinite(floorValue) ? floorValue : undefined,
     flat,
     flatNumber: flat || undefined,
     weight: weight ? `${weight.replace(/\s*kg$/i, "")} kg` : "",
+    lengthCm: positiveDimension(row, "length", "Length", "lengthCm", "LengthCm"),
+    widthCm: positiveDimension(row, "width", "Width", "widthCm", "WidthCm"),
+    heightCm: positiveDimension(row, "height", "Height", "heightCm", "HeightCm"),
     receivedAt:
       textOf(row, "receivedAt", "ReceivedAt", "recievedAt", "RecievedAt") ||
       new Date().toISOString(),
@@ -204,7 +225,7 @@ export function toHubPackage(row: Record<string, unknown>): HubPackage {
     codAmount:
       typeof codAmountRaw === "number" ? codAmountRaw : Number(codAmountRaw) || undefined,
     codApprovalStatus: textOf(row, "codApprovalStatus", "CodApprovalStatus") || undefined,
-    pkgNumber: textOf(row, "pkgNumber", "PkgNumber") || undefined,
+    pkgNumber,
     deliverySlotStatus: textOf(row, "deliverySlotStatus", "DeliverySlotStatus") || undefined,
     deliverySlotLabel: textOf(row, "deliverySlotLabel", "DeliverySlotLabel") || undefined,
     preferredDeliveryMethod:
