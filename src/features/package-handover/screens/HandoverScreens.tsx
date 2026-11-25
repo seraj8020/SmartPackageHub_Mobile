@@ -216,16 +216,22 @@ export function StaffHandoverScreen({ societyId }: { societyId: string }) {
           <EmptyState icon="search" title="No matching packages" body="Try a resident name, AWB number, or flat number." />
         ) : filteredPackages.map((pkg) => {
           const vacationStatus = pkg.residentId ? vacationStatuses[pkg.residentId] ?? "unknown" : "clear";
-          const holdActive = vacationStatus === "active";
+          const vacationActive = vacationStatus === "active";
           const holdUnverified = vacationStatus === "unknown";
-          const disabled = holdActive || holdUnverified;
+          const hasCollector = Boolean(pkg.authorizedCollectorName);
+          // Vacation without collector blocks handover; authorized collector allows counter pickup.
+          const disabled = (vacationActive && !hasCollector) || holdUnverified;
           return (
           <Pressable
             key={pkg.id}
             disabled={disabled}
             onPress={() => setSelected(pkg)}
             accessibilityState={{ disabled }}
-            accessibilityLabel={holdActive ? `${pkg.recipientName || "Resident"} is on vacation hold` : undefined}
+            accessibilityLabel={
+              vacationActive && !hasCollector
+                ? `${pkg.recipientName || "Resident"} is on vacation hold`
+                : undefined
+            }
             style={({ pressed }) => [CARD, styles.packageCard, disabled && styles.packageBlocked, pressed && !disabled && styles.pressed]}
           >
             <ArrivalPhotoThumb pkg={pkg} size={56} />
@@ -242,7 +248,18 @@ export function StaffHandoverScreen({ societyId }: { societyId: string }) {
               {pkg.deliverySlotLabel ? <Text style={[styles.slot, pkg.deliverySlotStatus === "default" ? styles.defaultSlot : styles.bookedSlot]}>
                 {pkg.deliverySlotStatus === "default" ? "Default door " : "Door "}{pkg.deliverySlotLabel}
               </Text> : null}
-              {holdActive ? <Text style={styles.vacationHoldBadge}>Vacation hold active</Text> : null}
+              {hasCollector ? (
+                <Text style={styles.collectorBadge}>
+                  Collect: {pkg.authorizedCollectorName}
+                  {pkg.authorizedCollectorPhone ? ` · ${pkg.authorizedCollectorPhone}` : ""}
+                </Text>
+              ) : null}
+              {vacationActive && !hasCollector ? (
+                <Text style={styles.vacationHoldBadge}>Vacation hold active</Text>
+              ) : null}
+              {vacationActive && hasCollector ? (
+                <Text style={styles.vacationHoldBadge}>Vacation hold — authorized collector OK</Text>
+              ) : null}
               {holdUnverified ? <Text style={styles.vacationHoldChecking}>Checking vacation hold…</Text> : null}
             </View>
             {!disabled ? <Ionicons name="chevron-forward" size={17} color="#D1D5DB" /> : null}
@@ -259,12 +276,17 @@ function HandoverForm({ pkg, onBack, onDelivered }: { pkg: HubPackage; onBack: (
   const [generatedOtp, setGeneratedOtp] = useState("");
   const [otpNotice, setOtpNotice] = useState("");
   const [generatingOtp, setGeneratingOtp] = useState(false);
-  const [method, setMethod] = useState<DeliveryMethod>(pkg.preferredDeliveryMethod === "CounterPickup" ? "CounterPickup" : "DoorDelivery");
+  const forceCounter = Boolean(pkg.authorizedCollectorName);
+  const [method, setMethod] = useState<DeliveryMethod>(
+    forceCounter || pkg.preferredDeliveryMethod === "CounterPickup" ? "CounterPickup" : "DoorDelivery",
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cameraMode, setCameraMode] = useState<"off" | "qr" | "photo">("off");
   const [permission, requestPermission] = useCameraPermissions();
-  const [signedByName, setSignedByName] = useState(pkg.recipientName?.trim() || "");
+  const [signedByName, setSignedByName] = useState(
+    pkg.authorizedCollectorName?.trim() || pkg.recipientName?.trim() || "",
+  );
   const [evidenceNote, setEvidenceNote] = useState("");
   const [photoBase64, setPhotoBase64] = useState<string | null>(null);
   const [signatureEmpty, setSignatureEmpty] = useState(true);
@@ -470,9 +492,25 @@ function HandoverForm({ pkg, onBack, onDelivered }: { pkg: HubPackage; onBack: (
 
         <View style={[CARD, styles.methodCard]}>
           <Text style={styles.fieldLabel}>METHOD OF DELIVERY</Text>
-          {pkg.preferredDeliveryMethod ? <Text style={styles.preference}>Resident preference: <Text style={styles.preferenceStrong}>{pkg.preferredDeliveryMethod === "CounterPickup" ? "Counter pickup" : "Door delivery"}</Text>. Staff can override if plans changed.</Text> : null}
+          {pkg.authorizedCollectorName ? (
+            <Text style={styles.preference}>
+              Authorized collector: <Text style={styles.preferenceStrong}>{pkg.authorizedCollectorName}</Text>
+              {pkg.authorizedCollectorPhone ? ` · ${pkg.authorizedCollectorPhone}` : ""}. Confirm ID and have them sign.
+            </Text>
+          ) : null}
+          {pkg.preferredDeliveryMethod && !forceCounter ? (
+            <Text style={styles.preference}>
+              Resident preference:{" "}
+              <Text style={styles.preferenceStrong}>
+                {pkg.preferredDeliveryMethod === "CounterPickup" ? "Counter pickup" : "Door delivery"}
+              </Text>
+              . Staff can override if plans changed.
+            </Text>
+          ) : null}
           <View style={styles.methodsRow}>
-            <MethodOption label="Door delivery" selected={method === "DoorDelivery"} onPress={() => setMethod("DoorDelivery")} />
+            {!forceCounter ? (
+              <MethodOption label="Door delivery" selected={method === "DoorDelivery"} onPress={() => setMethod("DoorDelivery")} />
+            ) : null}
             <MethodOption label="Counter pickup" selected={method === "CounterPickup"} onPress={() => setMethod("CounterPickup")} />
           </View>
         </View>
@@ -720,6 +758,7 @@ const styles = StyleSheet.create({
   defaultSlot: { backgroundColor: "#FFFBEB", color: "#92400E" },
   bookedSlot: { backgroundColor: "#ECFDF5", color: "#065F46" },
   vacationHoldBadge: { alignSelf: "flex-start", overflow: "hidden", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3, fontSize: 8, fontWeight: "700", marginTop: 4, backgroundColor: "#FEE2E2", color: "#B91C1C" },
+  collectorBadge: { alignSelf: "flex-start", overflow: "hidden", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3, fontSize: 8, fontWeight: "700", marginTop: 4, backgroundColor: "#ECFDF5", color: "#047857" },
   vacationHoldChecking: { color: "#92400E", fontSize: 8, fontWeight: "600", marginTop: 4 },
   pressed: { opacity: 0.78 },
   messageCard: { padding: 13 },

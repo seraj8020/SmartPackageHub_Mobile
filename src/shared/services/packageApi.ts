@@ -56,6 +56,12 @@ export interface HubPackage {
   arrivalPhotoUrl?: string;
   /** True when PackageImage exists — open package detail to view the photo. */
   hasArrivalPhoto?: boolean;
+  /** Active authorized collector for pickup on behalf of the resident. */
+  authorizedCollectorName?: string;
+  authorizedCollectorPhone?: string;
+  authorizedCollectorNote?: string;
+  authorizedCollectorId?: string;
+  authorizedCollectorExpiresAtUtc?: string;
 }
 
 export interface ResidentPackageDetail extends HubPackage {
@@ -234,6 +240,12 @@ export function toHubPackage(row: Record<string, unknown>): HubPackage {
       row.hasArrivalPhoto === true ||
       row.HasArrivalPhoto === true ||
       Boolean(damage.arrivalPhotoUrl),
+    authorizedCollectorName:
+      textOf(row, "authorizedCollectorName", "AuthorizedCollectorName") || undefined,
+    authorizedCollectorPhone:
+      textOf(row, "authorizedCollectorPhone", "AuthorizedCollectorPhone") || undefined,
+    authorizedCollectorNote:
+      textOf(row, "authorizedCollectorNote", "AuthorizedCollectorNote") || undefined,
     ...damage,
   };
 }
@@ -290,9 +302,25 @@ export async function getResidentPackageDetail(
   const row = body;
   const damage = damageFields(row);
   const packageRow = objectOf(row, "package", "Package", "data", "Data", "result", "Result") ?? row;
+  const collector = objectOf(row, "authorizedCollector", "AuthorizedCollector");
   return {
     ...toHubPackage(packageRow),
     ...damage,
+    authorizedCollectorId: collector
+      ? textOf(collector, "id", "Id") || undefined
+      : undefined,
+    authorizedCollectorName: collector
+      ? textOf(collector, "collectorName", "CollectorName") || undefined
+      : textOf(row, "authorizedCollectorName", "AuthorizedCollectorName") || undefined,
+    authorizedCollectorPhone: collector
+      ? textOf(collector, "collectorPhone", "CollectorPhone") || undefined
+      : textOf(row, "authorizedCollectorPhone", "AuthorizedCollectorPhone") || undefined,
+    authorizedCollectorNote: collector
+      ? textOf(collector, "note", "Note") || undefined
+      : textOf(row, "authorizedCollectorNote", "AuthorizedCollectorNote") || undefined,
+    authorizedCollectorExpiresAtUtc: collector
+      ? textOf(collector, "expiresAtUtc", "ExpiresAtUtc") || undefined
+      : undefined,
   };
 }
 

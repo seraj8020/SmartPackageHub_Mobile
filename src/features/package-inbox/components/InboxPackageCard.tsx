@@ -141,6 +141,9 @@ export function InboxPackageCard({ pkg, residentId, onPress }: Props) {
 
         <View style={styles.chips}>
           {pkg.isDamaged ? <Text style={styles.damageChip}>Damaged</Text> : null}
+          {pkg.authorizedCollectorName ? (
+            <Text style={styles.collectorChip}>Collector: {pkg.authorizedCollectorName}</Text>
+          ) : null}
           {pkg.isCod ? (
             <Text style={styles.codChip}>
               COD
@@ -211,6 +214,16 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#991B1B",
     backgroundColor: "#FEF2F2",
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    overflow: "hidden",
+  },
+  collectorChip: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#047857",
+    backgroundColor: "#ECFDF5",
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 6,
