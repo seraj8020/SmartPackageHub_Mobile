@@ -29,9 +29,12 @@ export function getReturnRequestEligibility(options: ReturnEligibilityInput): Re
     options.packageStatus,
     options.status,
   );
+  // Prefer packageStatus. History used to map Delivery.Status ("Completed") into status —
+  // treat that as delivered so the return button still shows.
   const lifecycle = normalizeStatus(options.packageStatus ?? options.status);
   const isDelivered =
     lifecycle === "delivered" ||
+    lifecycle === "completed" ||
     (options.treatBlankAsDelivered === true && lifecycle === "");
 
   const deliveredAtMs = Date.parse(options.deliveredAt ?? "");

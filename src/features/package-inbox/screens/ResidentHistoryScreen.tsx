@@ -9,21 +9,16 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { ResidentStackParamList } from "@/app/navigation/types";
 import { getResidentSession } from "@/features/authentication/services/sessionStorage";
 import { RequestReturnPanel } from "@/features/package-returns/components/RequestReturnPanel";
 import { ReturnRequestedConfirm } from "@/features/package-returns/components/ReturnRequestedConfirm";
 import { requestPackageReturn } from "@/features/package-returns/services/packageReturnApi";
 import { getReturnRequestEligibility } from "@/features/package-returns/utils/residentReturnEligibility";
-import { historyItemToHubPackage } from "@/features/package-returns/utils/historyItemToHubPackage";
 import { getResidentHistory, type HistoryItem } from "@/shared/services/packageApi";
 import { colors } from "@/shared/theme/colors";
 import { formatDisplayTimestamp } from "@/shared/utils/formatDisplayTimestamp";
-
-type Nav = NativeStackNavigationProp<ResidentStackParamList, "History">;
 
 type HistoryFilter = "all" | "thisMonth" | "lastMonth";
 
@@ -54,7 +49,6 @@ function historyTrackingLine(item: HistoryItem): string | null {
 }
 
 export function ResidentHistoryScreen() {
-  const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState<HistoryFilter>("all");
   const [items, setItems] = useState<HistoryItem[]>([]);
@@ -104,7 +98,12 @@ export function ResidentHistoryScreen() {
       setItems((current) =>
         current.map((row) =>
           row.packageId === item.packageId
-            ? { ...row, returnStatus: "ReturnRequested", status: "ReturnRequested" }
+            ? {
+                ...row,
+                returnStatus: "ReturnRequested",
+                status: "ReturnRequested",
+                packageStatus: "ReturnRequested",
+              }
             : row,
         ),
       );
@@ -178,35 +177,26 @@ export function ResidentHistoryScreen() {
                   />
                 </View>
                 <View style={styles.cardContent}>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Open package detail"
-                    onPress={() => {
-                      if (!item.packageId) return;
-                      navigation.navigate("PackageDetail", { pkg: historyItemToHubPackage(item) });
-                    }}
-                  >
-                    <Text style={styles.courier}>{item.courier}</Text>
-                    {item.category ? (
-                      <Text style={styles.category} numberOfLines={1}>
-                        {item.category}
-                      </Text>
-                    ) : null}
-                    {item.pkgNumber ? (
-                      <Text style={styles.packageNumber}>Package {item.pkgNumber}</Text>
-                    ) : null}
-                    {trackingLine ? (
-                      <Text style={styles.trackingLine} numberOfLines={2}>
-                        {trackingLine}
-                      </Text>
-                    ) : null}
-                    <Text style={styles.deliveryInfo}>
-                      {formatDisplayTimestamp(item.collectedAt)}
-                      {item.methodOfDelivery || item.method
-                        ? ` · ${item.methodOfDelivery || item.method}`
-                        : ""}
+                  <Text style={styles.courier}>{item.courier}</Text>
+                  {item.category ? (
+                    <Text style={styles.category} numberOfLines={1}>
+                      {item.category}
                     </Text>
-                  </Pressable>
+                  ) : null}
+                  {item.pkgNumber ? (
+                    <Text style={styles.packageNumber}>Package {item.pkgNumber}</Text>
+                  ) : null}
+                  {trackingLine ? (
+                    <Text style={styles.trackingLine} numberOfLines={2}>
+                      {trackingLine}
+                    </Text>
+                  ) : null}
+                  <Text style={styles.deliveryInfo}>
+                    {formatDisplayTimestamp(item.collectedAt)}
+                    {item.methodOfDelivery || item.method
+                      ? ` · ${item.methodOfDelivery || item.method}`
+                      : ""}
+                  </Text>
                   <RequestReturnPanel
                     compact
                     eligibility={eligibility}

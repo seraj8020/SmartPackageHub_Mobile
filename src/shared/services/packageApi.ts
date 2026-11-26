@@ -84,7 +84,11 @@ export interface HistoryItem {
   /** Courier AWB / airway bill. */
   courierAwb?: string;
   methodOfDelivery?: string;
+  /** Delivery attempt status from API (e.g. Completed) — not package lifecycle. */
+  deliveryStatus?: string;
+  /** @deprecated Prefer packageStatus for lifecycle checks. */
   status?: string;
+  /** Package lifecycle: Delivered, ReturnRequested, … */
   packageStatus?: string;
   returnStatus?: string;
 }
@@ -398,17 +402,27 @@ export async function getResidentHistory(residentId: string): Promise<HistoryIte
   const rows = (await response.json()) as Array<Record<string, unknown>>;
   return rows.map((row) => {
     const method = textOf(row, "method", "Method", "methodOfDelivery", "MethodOfDelivery");
+    const deliveryStatus = textOf(row, "status", "Status") || undefined;
+    // History is completed deliveries — default lifecycle to Delivered when API omits PackageStatus.
+    // Do not use Delivery.Status (Completed) as package lifecycle or the return button stays hidden.
+    const packageStatus =
+      textOf(row, "packageStatus", "PackageStatus") ||
+      (deliveryStatus && !/^completed$/i.test(deliveryStatus) ? deliveryStatus : "Delivered");
+    const returnStatus = textOf(row, "returnStatus", "ReturnStatus") || undefined;
     return {
       id: textOf(row, "id", "Id") || textOf(row, "packageId", "PackageId"),
       packageId: textOf(row, "packageId", "PackageId") || textOf(row, "id", "Id"),
       courier: textOf(row, "courier", "Courier") || "Courier",
-      collectedAt: textOf(row, "collectedAt", "CollectedAt", "deliveredAt", "DeliveredAt"),
-      category: textOf(row, "category", "Category", "status", "Status") || "Miscellaneous",
+      collectedAt: textOf(row, "deliveredAt", "DeliveredAt", "collectedAt", "CollectedAt"),
+      category: textOf(row, "category", "Category") || "Miscellaneous",
       method,
       pkgNumber: textOf(row, "pkgNumber", "PkgNumber") || undefined,
-      status: textOf(row, "status", "Status") || undefined,
-      packageStatus: textOf(row, "packageStatus", "PackageStatus") || undefined,
-      returnStatus: textOf(row, "returnStatus", "ReturnStatus") || undefined,
+      deliveryStatus,
+      status: packageStatus,
+      packageStatus,
+      returnStatus:
+        returnStatus ||
+        (/^returnrequested$/i.test(packageStatus) ? "ReturnRequested" : undefined),
       trackingNumber: textOf(row, "trackingNumber", "TrackingNumber") || undefined,
       courierAwb: textOf(row, "courierAwb", "CourierAwb", "awb", "Awb") || undefined,
       methodOfDelivery: method || undefined,
