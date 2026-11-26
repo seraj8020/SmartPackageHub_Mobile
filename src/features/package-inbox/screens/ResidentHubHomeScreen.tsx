@@ -124,6 +124,7 @@ export function ResidentHubHomeScreen() {
   function openSettings() {
     Alert.alert(session?.fullName ?? "Resident", societyName || "SPH", [
       { text: "Profile", onPress: () => navigation.navigate("Profile") },
+      { text: "Support", onPress: () => navigation.navigate("Support") },
       { text: "Sign out", style: "destructive", onPress: () => void signOut() },
       { text: "Cancel", style: "cancel" },
     ]);
@@ -169,6 +170,14 @@ export function ResidentHubHomeScreen() {
           onPress={() => navigation.navigate("Profile")}
         />
       </HubTileRow>
+
+      <HubTile
+        wide
+        title="Support"
+        subtitle="Ask the hub team — context goes with your question"
+        icon="help-buoy-outline"
+        onPress={() => navigation.navigate("Support")}
+      />
 
       {pendingCodCount > 0 ? (
         <HubTile

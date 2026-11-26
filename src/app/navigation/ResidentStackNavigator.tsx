@@ -8,6 +8,7 @@ import { ResidentProfileScreen } from "@/features/package-inbox/screens/Resident
 import { DoorDeliverySlotScreen } from "@/features/delivery-slots/screens/DoorDeliverySlotScreen";
 import { AuthorizeCollectorScreen } from "@/features/authorized-collector/screens/AuthorizeCollectorScreen";
 import { VacationHoldScreen } from "@/features/vacation-hold/screens/VacationHoldScreen";
+import { ResidentSupportScreen } from "@/features/resident-support/screens/ResidentSupportScreen";
 import { colors } from "@/shared/theme/colors";
 import { hubColors } from "@/shared/ui/hub/hubTheme";
 
@@ -52,6 +53,11 @@ export function ResidentStackNavigator() {
         options={{ ...detailScreenOptions, headerShown: false, title: "Vacation" }}
       />
       <Stack.Screen name="Profile" component={ResidentProfileScreen} options={{ ...detailScreenOptions, title: "Profile" }} />
+      <Stack.Screen
+        name="Support"
+        component={ResidentSupportScreen}
+        options={{ ...detailScreenOptions, headerShown: false, title: "Support" }}
+      />
       <Stack.Screen
         name="DeliveryPreference"
         component={DoorDeliverySlotScreen}

@@ -3,6 +3,10 @@ import { API, apiFetch, authHeaders, authTokenHeader } from "@/shared/services/a
 export interface Society {
   id: string;
   name: string;
+  /** Society hub contact email (resident Support). */
+  contactEmail?: string;
+  /** Society hub phone (resident Support). */
+  phone?: string;
 }
 
 export type PackageLifecycleStatus = "Received" | "Shelved" | "Dispatched" | "Delivered" | string;
@@ -265,6 +269,8 @@ export async function getSocieties(): Promise<Society[]> {
   return rows.map((row) => ({
     id: textOf(row, "id", "Id"),
     name: textOf(row, "name", "Name"),
+    contactEmail: textOf(row, "contactEmail", "ContactEmail") || undefined,
+    phone: textOf(row, "phone", "Phone") || undefined,
   }));
 }
 
