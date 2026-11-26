@@ -26,6 +26,11 @@ export type ReturnEligibilityInput = {
   windowDays?: number;
   /** When true, blank status counts as Delivered (history list). */
   treatBlankAsDelivered?: boolean;
+  /**
+   * History rows are completed deliveries. Treat as delivered unless already
+   * return-requested — do not require package lifecycle == Delivered.
+   */
+  fromDeliveryHistory?: boolean;
 };
 
 export type ReturnEligibility = {

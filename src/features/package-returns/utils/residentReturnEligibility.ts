@@ -15,12 +15,14 @@ export function isReturnRequestedStatus(...statuses: Array<string | null | undef
 }
 
 export function isDeliveredLifecycleStatus(status?: string | null): boolean {
-  return normalizeStatus(status) === "delivered";
+  const normalized = normalizeStatus(status);
+  return normalized === "delivered" || normalized === "completed";
 }
 
 /**
- * History rows often omit packageStatus when the item is a completed delivery.
- * Treat blank lifecycle as Delivered for history; package detail should pass explicit status.
+ * Eligibility for resident "Request return".
+ * History: pass fromDeliveryHistory — rows are completed deliveries.
+ * Package detail: pass explicit package lifecycle status.
  */
 export function getReturnRequestEligibility(options: ReturnEligibilityInput): ReturnEligibility {
   const windowDays = options.windowDays ?? DEFAULT_RETURN_WINDOW_DAYS;
@@ -29,10 +31,10 @@ export function getReturnRequestEligibility(options: ReturnEligibilityInput): Re
     options.packageStatus,
     options.status,
   );
-  // Prefer packageStatus. History used to map Delivery.Status ("Completed") into status —
-  // treat that as delivered so the return button still shows.
+
   const lifecycle = normalizeStatus(options.packageStatus ?? options.status);
   const isDelivered =
+    options.fromDeliveryHistory === true ||
     lifecycle === "delivered" ||
     lifecycle === "completed" ||
     (options.treatBlankAsDelivered === true && lifecycle === "");

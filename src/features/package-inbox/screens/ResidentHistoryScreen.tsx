@@ -165,7 +165,7 @@ export function ResidentHistoryScreen() {
               packageStatus: item.packageStatus,
               returnStatus: item.returnStatus,
               deliveredAt: item.collectedAt,
-              treatBlankAsDelivered: true,
+              fromDeliveryHistory: true,
             });
             return (
               <View key={item.id || `${item.pkgNumber ?? "package"}-${index}`} style={styles.card}>
