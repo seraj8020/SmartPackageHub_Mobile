@@ -1,4 +1,5 @@
 import { API, authHeaders } from "@/shared/services/apiClient";
+import type { SupportTicket } from "@/features/resident-support/models/support.types";
 
 export type ResidentSupportConfig = {
   supportEmail: string;
@@ -7,22 +8,15 @@ export type ResidentSupportConfig = {
 
 export type CreateSupportRequestInput = {
   residentId: string;
-  /** Optional; server uses the resident's society from DB. */
   societyId?: string;
-  topic: string;
+  subject: string;
+  category: string;
+  urgency: string;
   message: string;
   residentName?: string;
   residentPhone?: string;
   towerWing?: string;
   flatNumber?: string;
-};
-
-export type CreateSupportRequestResult = {
-  id: string;
-  status: string;
-  supportEmail: string;
-  requestedAtUtc: string;
-  message: string;
 };
 
 async function readError(response: Response, fallback: string): Promise<never> {
@@ -39,6 +33,20 @@ function textOf(row: Record<string, unknown>, ...keys: string[]): string {
   return "";
 }
 
+function mapTicket(row: Record<string, unknown>): SupportTicket {
+  return {
+    id: textOf(row, "id", "Id"),
+    referenceCode: textOf(row, "referenceCode", "ReferenceCode"),
+    subject: textOf(row, "subject", "Subject"),
+    category: textOf(row, "category", "Category", "topic", "Topic"),
+    urgency: textOf(row, "urgency", "Urgency") || "Normal",
+    message: textOf(row, "message", "Message"),
+    status: textOf(row, "status", "Status") || "Open",
+    supportEmail: textOf(row, "supportEmail", "SupportEmail") || undefined,
+    requestedAtUtc: textOf(row, "requestedAtUtc", "RequestedAtUtc"),
+  };
+}
+
 export async function getResidentSupportConfig(): Promise<ResidentSupportConfig> {
   const response = await fetch(`${API}/support/config`, {
     headers: await authHeaders(),
@@ -51,16 +59,29 @@ export async function getResidentSupportConfig(): Promise<ResidentSupportConfig>
   };
 }
 
+export async function listSupportRequests(residentId: string): Promise<SupportTicket[]> {
+  const response = await fetch(
+    `${API}/support/requests?residentId=${encodeURIComponent(residentId)}`,
+    { headers: await authHeaders() },
+  );
+  if (!response.ok) await readError(response, `Unable to load support requests (${response.status})`);
+  const payload = (await response.json()) as unknown;
+  const rows = Array.isArray(payload) ? payload : [];
+  return rows.map((row) => mapTicket((row ?? {}) as Record<string, unknown>));
+}
+
 export async function createSupportRequest(
   input: CreateSupportRequestInput,
-): Promise<CreateSupportRequestResult> {
+): Promise<SupportTicket> {
   const response = await fetch(`${API}/support/requests`, {
     method: "POST",
     headers: await authHeaders(),
     body: JSON.stringify({
       residentId: input.residentId,
       ...(input.societyId ? { societyId: input.societyId } : {}),
-      topic: input.topic,
+      subject: input.subject,
+      category: input.category,
+      urgency: input.urgency,
       message: input.message,
       residentName: input.residentName,
       residentPhone: input.residentPhone,
@@ -69,12 +90,5 @@ export async function createSupportRequest(
     }),
   });
   if (!response.ok) await readError(response, `Unable to submit support request (${response.status})`);
-  const row = (await response.json()) as Record<string, unknown>;
-  return {
-    id: textOf(row, "id", "Id"),
-    status: textOf(row, "status", "Status"),
-    supportEmail: textOf(row, "supportEmail", "SupportEmail"),
-    requestedAtUtc: textOf(row, "requestedAtUtc", "RequestedAtUtc"),
-    message: textOf(row, "message", "Message") || "Support request received.",
-  };
+  return mapTicket((await response.json()) as Record<string, unknown>);
 }
