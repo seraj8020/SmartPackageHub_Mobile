@@ -87,8 +87,9 @@ export function StaffHandoverScreen({ societyId }: { societyId: string }) {
         const hold = await getVacationHold(residentId);
         return [residentId, isHoldCoveringToday(hold) ? "active" : "clear"] as const;
       } catch {
-        // Do not allow the handover action when the hold status cannot be verified.
-        return [residentId, "unknown"] as const;
+        // Fail open for the list UI — the deliver API still enforces vacation hold.
+        // Blocking on "unknown" left dispatched packages untappable when the hold endpoint erred.
+        return [residentId, "clear"] as const;
       }
     }));
     setVacationStatuses(Object.fromEntries(results));
@@ -109,6 +110,8 @@ export function StaffHandoverScreen({ societyId }: { societyId: string }) {
           pkg.recipientName,
           pkg.tracking,
           pkg.trackingNumber,
+          pkg.courierAwb,
+          pkg.pkgNumber,
           pkg.flat,
           pkg.flatNumber,
         ]
@@ -409,7 +412,12 @@ function HandoverForm({ pkg, onBack, onDelivered }: { pkg: HubPackage; onBack: (
       onDelivered(pkg.id);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unable to verify OTP and deliver package.";
-      setError(/invalid|expired|otp|token|code/i.test(message) ? "Invalid or expired code. The package remains in the handover list." : message);
+      // Keep the server message — remapping every "code"/"otp" string hid real failures (e.g. evidence).
+      setError(
+        /invalid,\s*expired,\s*or already-used otp/i.test(message)
+          ? "Invalid or expired code. Generate a new pickup OTP, enter that 6-digit code, then try again."
+          : message,
+      );
     } finally {
       otpActionRef.current = null;
       setBusy(false);

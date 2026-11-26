@@ -220,7 +220,7 @@ export function usePackageIntake(options: {
     setBusy(true);
     scanner.setError(null);
     const trimmedName = staffName.trim() || "Hub Staff";
-    await SecureStore.setItemAsync(STAFF_NAME_STORAGE_KEY, trimmedName);
+    void SecureStore.setItemAsync(STAFF_NAME_STORAGE_KEY, trimmedName);
 
     const courier = scanner.courier.trim();
     if (!courier) {
@@ -297,19 +297,20 @@ export function usePackageIntake(options: {
         await uploadParcelPhoto(arrival.clientPhotoId, arrival.uri);
         if (alive.current) setPhotoState("Arrival photo saved");
         const result = await confirmIntake(payload);
-        // Confirm writes the intake↔photo link; cheap re-link if PackageImage row is still missing.
-        if (!result.photoStored && arrival.clientPhotoId) {
-          try {
-            await linkParcelPhoto(arrival.clientPhotoId, result.intakeId, result.packageId);
-            if (alive.current) setPhotoState("Arrival photo linked for resident");
-          } catch {
-            if (alive.current) {
-              setPhotoState("Arrival photo saved but not linked — resident may not see it yet");
-            }
-          }
-        }
         scanner.stopCamera();
         setReceipt(result);
+        // Confirm already links the photo. Re-link in the background if PackageImage is still missing.
+        if (!result.photoStored && arrival.clientPhotoId) {
+          void linkParcelPhoto(arrival.clientPhotoId, result.intakeId, result.packageId)
+            .then(() => {
+              if (alive.current) setPhotoState("Arrival photo linked for resident");
+            })
+            .catch(() => {
+              if (alive.current) {
+                setPhotoState("Arrival photo saved but not linked — resident may not see it yet");
+              }
+            });
+        }
         if (damagePhoto) {
           setDamageState("Saving damage photo…");
           uploadDamagePhoto(result.intakeId, damagePhoto, damageNote.trim() || undefined)

@@ -75,16 +75,14 @@ export function ResidentRegistrationScreen({ navigation }: Props) {
 
   async function submit() {
     const phoneNumber = normalisePhone(form.phoneNumber);
-    if (
-      !form.fullName.trim() ||
-      !form.societyId ||
-      !form.towerWing.trim() ||
-      !form.flatNumber.trim() ||
-      phoneNumber.length !== 10
-    ) {
-      setError(
-        "Select your society and enter your full name, tower or wing, flat number, and a valid 10-digit mobile number.",
-      );
+    const missing: string[] = [];
+    if (!form.fullName.trim()) missing.push("full name");
+    if (!form.societyId) missing.push("society");
+    if (!form.towerWing.trim()) missing.push("tower / wing");
+    if (!form.flatNumber.trim()) missing.push("flat number");
+    if (phoneNumber.length !== 10) missing.push("a valid 10-digit mobile number");
+    if (missing.length > 0) {
+      setError(`Please provide: ${missing.join(", ")}.`);
       return;
     }
 
@@ -240,10 +238,13 @@ export function ResidentRegistrationScreen({ navigation }: Props) {
         animationType="fade"
         onRequestClose={() => setSocietyPickerOpen(false)}
       >
-        <Pressable
-          style={styles.modalBackdrop}
-          onPress={() => setSocietyPickerOpen(false)}
-        >
+        <View style={styles.modalBackdrop}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setSocietyPickerOpen(false)}
+            accessibilityRole="button"
+            accessibilityLabel="Close society picker"
+          />
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Select society</Text>
             <FlatList
@@ -255,6 +256,7 @@ export function ResidentRegistrationScreen({ navigation }: Props) {
                   style={styles.societyRow}
                   onPress={() => {
                     update("societyId", item.id);
+                    setError(null);
                     setSocietyPickerOpen(false);
                   }}
                 >
@@ -262,11 +264,15 @@ export function ResidentRegistrationScreen({ navigation }: Props) {
                 </Pressable>
               )}
               ListEmptyComponent={
-                <Text style={styles.emptySocieties}>No societies available.</Text>
+                <Text style={styles.emptySocieties}>
+                  {error
+                    ? error
+                    : "No societies available. Confirm the app points at the Development API and that the API is running on your PC (listening on 0.0.0.0:5210, not only localhost)."}
+                </Text>
               }
             />
           </View>
-        </Pressable>
+        </View>
       </Modal>
     </AuthFormScreen>
   );

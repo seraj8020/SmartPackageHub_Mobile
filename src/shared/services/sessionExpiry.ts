@@ -2,6 +2,7 @@ import { CommonActions } from "@react-navigation/native";
 import { navigationRef } from "@/app/navigation/navigationRef";
 import {
   clearResidentSession,
+  clearSessionMemoryCache,
   clearStaffSession,
 } from "@/features/authentication/services/sessionStorage";
 import { tokenStorage } from "@/shared/services/tokenStorage";
@@ -16,6 +17,8 @@ export async function forceReauthentication(reason = "Session expired. Please si
   if (handlingUnauthorized) return;
   handlingUnauthorized = true;
   try {
+    clearSessionMemoryCache();
+    tokenStorage.clearMemoryCache();
     await Promise.all([
       clearStaffSession(),
       clearResidentSession(),

@@ -124,7 +124,12 @@ function textOf(row: Record<string, unknown>, ...keys: string[]): string {
   for (const key of keys) {
     const value = row[key] ?? row[Object.keys(row).find((candidate) => candidate.toLowerCase() === key.toLowerCase()) ?? ""];
     if (typeof value === "string" && value.trim()) return value.trim();
-    if (typeof value === "number") return String(value);
+    if (typeof value === "number" || typeof value === "boolean") return String(value);
+    // System.Text.Json Guids are strings; tolerate accidental non-string ids.
+    if (value != null && typeof value === "object" && "toString" in value) {
+      const asText = String(value).trim();
+      if (asText && asText !== "[object Object]") return asText;
+    }
   }
   return "";
 }
@@ -269,11 +274,28 @@ export async function getSocieties(): Promise<Society[]> {
     };
     throw new Error(err.message ?? err.Message ?? `Failed to fetch societies (${response.status})`);
   }
-  const rows = (await response.json()) as Array<Record<string, unknown>>;
-  return rows.map((row) => ({
-    id: textOf(row, "id", "Id"),
-    name: textOf(row, "name", "Name"),
-  }));
+  const payload = (await response.json()) as unknown;
+  const rows = Array.isArray(payload)
+    ? payload
+    : Array.isArray((payload as { data?: unknown })?.data)
+      ? ((payload as { data: unknown[] }).data)
+      : [];
+  return rows
+    .map((row) => {
+      const record = (row ?? {}) as Record<string, unknown>;
+      const idRaw = record.id ?? record.Id;
+      const id =
+        typeof idRaw === "string"
+          ? idRaw.trim()
+          : idRaw != null
+            ? String(idRaw).trim()
+            : "";
+      return {
+        id,
+        name: textOf(record, "name", "Name") || "Society",
+      };
+    })
+    .filter((society) => society.id.length > 0);
 }
 
 export async function getResidentPackages(residentId: string): Promise<HubPackage[]> {
