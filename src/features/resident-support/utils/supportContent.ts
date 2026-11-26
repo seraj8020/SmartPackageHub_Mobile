@@ -61,5 +61,5 @@ export const SUPPORT_FAQS: SupportFaqItem[] = [
   },
 ];
 
-/** Fallback when society has no contact email on file. */
-export const SPH_SUPPORT_EMAIL = "info@smartpackagehub.com";
+/** Fallback when API config / society email is unavailable. Override via ResidentSupport:SupportEmail. */
+export const SPH_SUPPORT_EMAIL = "hello@byonverse.com";

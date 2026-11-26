@@ -15,9 +15,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getResidentSession } from "@/features/authentication/services/sessionStorage";
 import type { SupportTopicId } from "@/features/resident-support/models/support.types";
 import {
-  buildSupportMessage,
-  buildSupportSubject,
-} from "@/features/resident-support/utils/buildSupportMessage";
+  createSupportRequest,
+  getResidentSupportConfig,
+} from "@/features/resident-support/services/supportApi";
 import {
   SPH_SUPPORT_EMAIL,
   SUPPORT_FAQS,
@@ -37,10 +37,13 @@ export function ResidentSupportScreen() {
   const [towerWing, setTowerWing] = useState<string | undefined>();
   const [flatNumber, setFlatNumber] = useState<string | undefined>();
   const [society, setSociety] = useState<SocietyContact | null>(null);
+  const [configEmail, setConfigEmail] = useState(SPH_SUPPORT_EMAIL);
+  const [configPhone, setConfigPhone] = useState<string | undefined>();
   const [topicId, setTopicId] = useState<SupportTopicId>("missing_package");
   const [message, setMessage] = useState("");
   const [openFaqId, setOpenFaqId] = useState<string | null>(SUPPORT_FAQS[0]?.id ?? null);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const topic = useMemo(
@@ -64,7 +67,16 @@ export function ResidentSupportScreen() {
       setTowerWing(session.towerWing);
       setFlatNumber(session.flatNumber);
 
-      const societies = await getSocieties();
+      const [societies, supportConfig] = await Promise.all([
+        getSocieties(),
+        getResidentSupportConfig().catch(() => ({
+          supportEmail: SPH_SUPPORT_EMAIL,
+          supportPhone: undefined as string | undefined,
+        })),
+      ]);
+      setConfigEmail(supportConfig.supportEmail || SPH_SUPPORT_EMAIL);
+      setConfigPhone(supportConfig.supportPhone);
+
       const match = societies.find((row) => row.id === session.societyId) ?? null;
       setSociety(
         match
@@ -89,8 +101,8 @@ export function ResidentSupportScreen() {
     }, [load]),
   );
 
-  const supportEmail = society?.contactEmail?.trim() || SPH_SUPPORT_EMAIL;
-  const supportPhone = society?.phone?.trim();
+  const supportEmail = configEmail || society?.contactEmail?.trim() || SPH_SUPPORT_EMAIL;
+  const supportPhone = configPhone?.trim() || society?.phone?.trim();
 
   async function sendAsk() {
     const trimmed = message.trim();
@@ -98,40 +110,29 @@ export function ResidentSupportScreen() {
       setError("Add a short note (at least a sentence) so the hub team can help.");
       return;
     }
-    if (!society) {
+    if (!society || !residentId) {
       setError("Society details are missing. Pull to refresh or sign in again.");
       return;
     }
 
     setBusy(true);
     setError(null);
-    const ctx = {
-      residentName,
-      residentId,
-      phoneNumber,
-      societyId: society.id,
-      societyName: society.name,
-      societyEmail: society.contactEmail,
-      societyPhone: society.phone,
-      towerWing,
-      flatNumber,
-      topicId: topic.id,
-      topicLabel: topic.label,
-      message: trimmed,
-    };
-    const subject = buildSupportSubject(ctx);
-    const body = buildSupportMessage(ctx);
-    const url = `mailto:${encodeURIComponent(supportEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-
+    setSuccess(null);
     try {
-      const canOpen = await Linking.canOpenURL(url);
-      if (!canOpen) {
-        setError("No email app is available on this device. Call the hub or copy your message.");
-        return;
-      }
-      await Linking.openURL(url);
-    } catch {
-      setError("Could not open email. Try calling the hub instead.");
+      const result = await createSupportRequest({
+        residentId,
+        societyId: society.id,
+        topic: topic.label,
+        message: trimmed,
+        residentName,
+        residentPhone: phoneNumber,
+        towerWing,
+        flatNumber,
+      });
+      setMessage("");
+      setSuccess(result.message || `Request sent. We will follow up at ${result.supportEmail || supportEmail}.`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not submit your request.");
     } finally {
       setBusy(false);
     }
@@ -219,6 +220,7 @@ export function ResidentSupportScreen() {
             />
 
             {error ? <Text style={styles.error}>{error}</Text> : null}
+            {success ? <Text style={styles.success}>{success}</Text> : null}
 
             <Pressable
               style={[styles.primaryButton, busy && styles.buttonDisabled]}
@@ -230,12 +232,12 @@ export function ResidentSupportScreen() {
                 <ActivityIndicator color="#fff" />
               ) : (
                 <>
-                  <Ionicons name="mail-outline" size={18} color="#fff" />
+                  <Ionicons name="chatbubble-ellipses-outline" size={18} color="#fff" />
                   <Text style={styles.primaryButtonText}>Ask hub team</Text>
                 </>
               )}
             </Pressable>
-            <Text style={styles.emailHint}>Sends to {supportEmail}</Text>
+            <Text style={styles.emailHint}>Routed to {supportEmail}</Text>
 
             {supportPhone ? (
               <Pressable style={styles.secondaryButton} onPress={() => void callHub()}>
@@ -345,6 +347,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   error: { marginTop: 10, color: colors.danger, fontSize: 13 },
+  success: { marginTop: 10, color: colors.primary, fontSize: 13, lineHeight: 18 },
   primaryButton: {
     marginTop: 14,
     minHeight: 48,
