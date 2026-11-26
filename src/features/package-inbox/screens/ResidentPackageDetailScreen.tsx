@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -14,14 +14,15 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { ResidentStackParamList } from "@/app/navigation/types";
 import { getResidentSession } from "@/features/authentication/services/sessionStorage";
-import { getReturnRequestEligibility } from "@/features/package-inbox/utils/residentReturnEligibility";
+import { RequestReturnPanel } from "@/features/package-returns/components/RequestReturnPanel";
+import { useResidentReturnRequest } from "@/features/package-returns/hooks/useResidentReturnRequest";
+import { isDeliveredLifecycleStatus } from "@/features/package-returns/utils/residentReturnEligibility";
 import {
   arrivalPhotoRequestHeaders,
   damagePhotoRequestHeaders,
   getResidentPackageDetail,
   refreshArrivalPhotoUrl,
   refreshDamagePhotoUrl,
-  requestPackageReturn,
   type ResidentPackageDetail,
 } from "@/shared/services/packageApi";
 import { colors } from "@/shared/theme/colors";
@@ -82,9 +83,6 @@ export function ResidentPackageDetailScreen({ route }: Props) {
   const [damageHeaders, setDamageHeaders] = useState<Record<string, string> | undefined>();
   const [retryingArrival, setRetryingArrival] = useState(false);
   const [retryingDamage, setRetryingDamage] = useState(false);
-  const [requestingReturn, setRequestingReturn] = useState(false);
-  const [returnError, setReturnError] = useState<string | null>(null);
-  const [returnSubmitted, setReturnSubmitted] = useState(false);
 
   const reloadDetail = useCallback(async (ownerId: string) => {
     const result = await getResidentPackageDetail(ownerId, pkg.id);
@@ -175,36 +173,21 @@ export function ResidentPackageDetailScreen({ route }: Props) {
     Boolean(arrivalUrl) || arrivalFailed || Boolean(current.hasArrivalPhoto);
   const showDamage = Boolean(current.isDamaged);
   const hasCollector = Boolean(current.authorizedCollectorName);
-  const returnEligibility = useMemo(
-    () =>
-      getReturnRequestEligibility({
-        status: returnSubmitted ? "ReturnRequested" : current.status,
-        deliveredAt: current.deliveredAt,
-        treatBlankAsDelivered: false,
-      }),
-    [current.deliveredAt, current.status, returnSubmitted],
-  );
-  const isDeliveredLifecycle =
-    (current.status ?? "").trim().toLowerCase() === "delivered" || returnSubmitted;
-
-  const submitReturn = useCallback(async () => {
-    if (requestingReturn || !returnEligibility.canRequest) return;
-    setRequestingReturn(true);
-    setReturnError(null);
-    try {
-      const session = await getResidentSession();
-      if (!session) throw new Error("Your session has expired. Please sign in again.");
-      await requestPackageReturn(pkg.id, session.residentId, "DamagedInside");
+  const returnRequest = useResidentReturnRequest({
+    packageId: pkg.id,
+    status: current.status,
+    deliveredAt: current.deliveredAt,
+    treatBlankAsDelivered: false,
+    onSucceeded: () => {
       setDetail((prev) =>
-        prev ? { ...prev, status: "ReturnRequested" } : ({ ...pkg, status: "ReturnRequested", isDamaged: Boolean(pkg.isDamaged) } as ResidentPackageDetail),
+        prev
+          ? { ...prev, status: "ReturnRequested" }
+          : ({ ...pkg, status: "ReturnRequested", isDamaged: Boolean(pkg.isDamaged) } as ResidentPackageDetail),
       );
-      setReturnSubmitted(true);
-    } catch (cause) {
-      setReturnError(cause instanceof Error ? cause.message : "Unable to request return.");
-    } finally {
-      setRequestingReturn(false);
-    }
-  }, [pkg, requestingReturn, returnEligibility.canRequest]);
+    },
+  });
+  const isDeliveredLifecycle =
+    isDeliveredLifecycleStatus(returnRequest.status ?? current.status) || returnRequest.submitted;
 
   return (
     <View style={styles.root}>
@@ -217,7 +200,7 @@ export function ResidentPackageDetailScreen({ route }: Props) {
         </View>
         <View style={styles.statusRow}>
           <Text style={styles.status}>
-            {returnSubmitted ? "ReturnRequested" : current.status ?? "Shelved"}
+            {returnRequest.submitted ? "ReturnRequested" : current.status ?? "Shelved"}
             {current.shelfCode ? ` · ${current.shelfCode}` : ""}
           </Text>
           {current.isDamaged ? <Text style={styles.damaged}>Damaged on arrival</Text> : null}
@@ -266,29 +249,13 @@ export function ResidentPackageDetailScreen({ route }: Props) {
         ) : null}
 
         {!loading && isDeliveredLifecycle ? (
-          <View style={styles.returnSection}>
-            <Text style={styles.sectionTitle}>Return</Text>
-            <View style={styles.card}>
-              <Text style={[styles.returnMessage, returnEligibility.alreadyRequested && styles.returnRequested]}>
-                {returnEligibility.message}
-              </Text>
-              {returnEligibility.canRequest ? (
-                <Pressable
-                  style={[styles.primaryAction, styles.returnAction, requestingReturn && styles.actionDisabled]}
-                  disabled={requestingReturn}
-                  onPress={() => void submitReturn()}
-                >
-                  <Text style={styles.primaryActionText}>
-                    {requestingReturn ? "Requesting…" : "Request return"}
-                  </Text>
-                </Pressable>
-              ) : null}
-              {returnError ? <Text style={styles.returnError}>{returnError}</Text> : null}
-              {returnSubmitted ? (
-                <Text style={styles.returnSuccess}>Return request received. Staff will guide pickup/drop.</Text>
-              ) : null}
-            </View>
-          </View>
+          <RequestReturnPanel
+            eligibility={returnRequest.eligibility}
+            busy={returnRequest.busy}
+            error={returnRequest.error}
+            submitted={returnRequest.submitted}
+            onRequest={() => void returnRequest.submit()}
+          />
         ) : null}
 
         {!isDeliveredLifecycle ? (
@@ -422,11 +389,4 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
   deliveryText: { color: colors.primary, fontWeight: "800", fontSize: 14 },
-  returnSection: { marginTop: 16 },
-  returnMessage: { color: "#526477", fontSize: 12, lineHeight: 17 },
-  returnRequested: { color: "#E11D48", fontWeight: "700" },
-  returnAction: { marginHorizontal: 0, marginTop: 12 },
-  actionDisabled: { opacity: 0.65 },
-  returnError: { marginTop: 10, color: "#B91C1C", fontSize: 12 },
-  returnSuccess: { marginTop: 10, color: "#166534", fontSize: 12, lineHeight: 17, fontWeight: "600" },
 });

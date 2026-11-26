@@ -89,13 +89,6 @@ export interface HistoryItem {
   returnStatus?: string;
 }
 
-export interface RequestPackageReturnResponse {
-  id?: string;
-  packageId?: string;
-  status?: string;
-  message?: string;
-}
-
 export interface PackageStatusUpdateResponse {
   success: boolean;
   packageId: string;
@@ -421,46 +414,6 @@ export async function getResidentHistory(residentId: string): Promise<HistoryIte
       methodOfDelivery: method || undefined,
     };
   });
-}
-
-export type PackageReturnReason =
-  | "NotAsExpected"
-  | "DamagedInside"
-  | "Expired"
-  | "TechnicalFault"
-  | "Other";
-
-/** Request a resident return for a delivered package. */
-export async function requestPackageReturn(
-  packageId: string,
-  residentId: string,
-  reason: PackageReturnReason = "DamagedInside",
-  note?: string,
-): Promise<RequestPackageReturnResponse> {
-  const response = await apiFetch(
-    `${API}/packages/${encodeURIComponent(packageId)}/returns`,
-    {
-      method: "POST",
-      headers: await authHeaders(),
-      body: JSON.stringify({
-        residentId,
-        reason,
-        ...(note?.trim() ? { note: note.trim() } : {}),
-      }),
-    },
-  );
-  const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-  if (!response.ok) {
-    throw new Error(
-      textOf(body, "message", "Message") || `Unable to request return (${response.status}).`,
-    );
-  }
-  return {
-    id: textOf(body, "id", "Id") || undefined,
-    packageId: textOf(body, "packageId", "PackageId") || packageId,
-    status: textOf(body, "status", "Status") || "ReturnRequested",
-    message: textOf(body, "message", "Message") || "Return request received.",
-  };
 }
 
 export async function getSocietyPackages(societyId: string): Promise<HubPackage[]> {
