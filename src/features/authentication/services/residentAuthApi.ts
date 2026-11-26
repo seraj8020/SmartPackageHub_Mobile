@@ -8,6 +8,7 @@ import type {
 export interface ResidentProfile {
   id: string;
   societyId: string;
+  societyName?: string;
   fullName?: string;
   phoneNumber?: string;
   towerWing?: string;
@@ -34,9 +35,18 @@ export async function getResidentProfile(residentId: string): Promise<ResidentPr
     }
     return undefined;
   };
+  const societyIdRaw = body.societyId ?? body.SocietyId;
+  const societyId =
+    typeof societyIdRaw === "string"
+      ? societyIdRaw.trim()
+      : societyIdRaw != null
+        ? String(societyIdRaw).trim()
+        : "";
+
   return {
     id: text("id", "Id") ?? residentId,
-    societyId: text("societyId", "SocietyId") ?? "",
+    societyId,
+    societyName: text("societyName", "SocietyName"),
     fullName: text("fullName", "FullName"),
     phoneNumber: text("phoneNumber", "PhoneNumber"),
     towerWing: text("towerWing", "TowerWing"),

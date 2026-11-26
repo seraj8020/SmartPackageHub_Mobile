@@ -1,4 +1,4 @@
-export type SupportTopicId =
+export type SupportCategoryId =
   | "missing_package"
   | "pickup_otp"
   | "return_help"
@@ -6,18 +6,29 @@ export type SupportTopicId =
   | "account"
   | "other";
 
-export type SupportTopic = {
-  id: SupportTopicId;
+export type SupportUrgency = "Low" | "Normal" | "High";
+
+export type SupportCategory = {
+  id: SupportCategoryId;
   label: string;
-  hint: string;
 };
 
-export type SupportFaqItem = {
+export type SupportTicket = {
   id: string;
-  question: string;
-  answer: string;
+  referenceCode: string;
+  subject: string;
+  category: string;
+  urgency: string;
+  message: string;
+  status: string;
+  supportEmail?: string;
+  requestedAtUtc: string;
 };
 
+/** @deprecated kept for older helpers */
+export type SupportTopicId = SupportCategoryId;
+export type SupportTopic = SupportCategory & { hint?: string };
+export type SupportFaqItem = { id: string; question: string; answer: string };
 export type SupportContext = {
   residentName: string;
   residentId: string;
@@ -28,7 +39,7 @@ export type SupportContext = {
   societyPhone?: string;
   towerWing?: string;
   flatNumber?: string;
-  topicId: SupportTopicId;
+  topicId: SupportCategoryId;
   topicLabel: string;
   message: string;
 };
