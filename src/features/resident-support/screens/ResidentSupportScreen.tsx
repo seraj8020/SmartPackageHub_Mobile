@@ -65,6 +65,8 @@ export function ResidentSupportScreen() {
   const [statusFilter, setStatusFilter] = useState<"all" | "Open">("all");
   const [search, setSearch] = useState("");
   const [composerOpen, setComposerOpen] = useState(false);
+  const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
+  const [urgencyPickerOpen, setUrgencyPickerOpen] = useState(false);
   const [subject, setSubject] = useState("");
   const [categoryId, setCategoryId] = useState<SupportCategoryId>("other");
   const [urgency, setUrgency] = useState<SupportUrgency>("Normal");
@@ -317,38 +319,26 @@ export function ResidentSupportScreen() {
               />
 
               <Text style={styles.label}>Category</Text>
-              <View style={styles.chipWrap}>
-                {SUPPORT_CATEGORIES.map((item) => {
-                  const selected = item.id === categoryId;
-                  return (
-                    <Pressable
-                      key={item.id}
-                      onPress={() => setCategoryId(item.id)}
-                      style={[styles.chip, selected && styles.chipSelected]}
-                    >
-                      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
-                        {item.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
+              <Pressable
+                style={[styles.input, styles.dropdown]}
+                onPress={() => setCategoryPickerOpen(true)}
+                disabled={busy}
+                accessibilityRole="button"
+              >
+                <Text style={styles.dropdownValue}>{category.label}</Text>
+                <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
+              </Pressable>
 
               <Text style={styles.label}>Urgency</Text>
-              <View style={styles.chipWrap}>
-                {SUPPORT_URGENCIES.map((item) => {
-                  const selected = item === urgency;
-                  return (
-                    <Pressable
-                      key={item}
-                      onPress={() => setUrgency(item)}
-                      style={[styles.chip, selected && styles.chipSelected]}
-                    >
-                      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{item}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
+              <Pressable
+                style={[styles.input, styles.dropdown]}
+                onPress={() => setUrgencyPickerOpen(true)}
+                disabled={busy}
+                accessibilityRole="button"
+              >
+                <Text style={styles.dropdownValue}>{urgency}</Text>
+                <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
+              </Pressable>
 
               <Text style={styles.label}>Message</Text>
               <TextInput
@@ -378,6 +368,68 @@ export function ResidentSupportScreen() {
             </ScrollView>
           </View>
         </View>
+      </Modal>
+
+      <Modal
+        visible={categoryPickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCategoryPickerOpen(false)}
+      >
+        <Pressable style={styles.pickerBackdrop} onPress={() => setCategoryPickerOpen(false)}>
+          <View style={styles.pickerCard}>
+            <Text style={styles.pickerTitle}>Category</Text>
+            {SUPPORT_CATEGORIES.map((item) => {
+              const selected = item.id === categoryId;
+              return (
+                <Pressable
+                  key={item.id}
+                  style={[styles.pickerRow, selected && styles.pickerRowSelected]}
+                  onPress={() => {
+                    setCategoryId(item.id);
+                    setCategoryPickerOpen(false);
+                  }}
+                >
+                  <Text style={[styles.pickerRowText, selected && styles.pickerRowTextSelected]}>
+                    {item.label}
+                  </Text>
+                  {selected ? <Ionicons name="checkmark" size={16} color={colors.primary} /> : null}
+                </Pressable>
+              );
+            })}
+          </View>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={urgencyPickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setUrgencyPickerOpen(false)}
+      >
+        <Pressable style={styles.pickerBackdrop} onPress={() => setUrgencyPickerOpen(false)}>
+          <View style={styles.pickerCard}>
+            <Text style={styles.pickerTitle}>Urgency</Text>
+            {SUPPORT_URGENCIES.map((item) => {
+              const selected = item === urgency;
+              return (
+                <Pressable
+                  key={item}
+                  style={[styles.pickerRow, selected && styles.pickerRowSelected]}
+                  onPress={() => {
+                    setUrgency(item);
+                    setUrgencyPickerOpen(false);
+                  }}
+                >
+                  <Text style={[styles.pickerRowText, selected && styles.pickerRowTextSelected]}>
+                    {item}
+                  </Text>
+                  {selected ? <Ionicons name="checkmark" size={16} color={colors.primary} /> : null}
+                </Pressable>
+              );
+            })}
+          </View>
+        </Pressable>
       </Modal>
     </View>
   );
@@ -519,18 +571,45 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   messageInput: { minHeight: 120 },
-  chipWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
-    borderRadius: 18,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+  dropdown: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
   },
-  chipSelected: { borderColor: colors.primary, backgroundColor: colors.primary },
-  chipText: { color: colors.textMuted, fontSize: 12, fontWeight: "700" },
-  chipTextSelected: { color: "#fff" },
+  dropdownValue: { flex: 1, color: colors.text, fontSize: 14, fontWeight: "600" },
+  pickerBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(15,23,42,0.45)",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  pickerCard: {
+    borderRadius: 14,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 8,
+    paddingVertical: 10,
+    maxHeight: "70%",
+  },
+  pickerTitle: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  pickerRow: {
+    minHeight: 44,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  pickerRowSelected: { backgroundColor: colors.primaryMuted },
+  pickerRowText: { flex: 1, color: colors.text, fontSize: 14, fontWeight: "600" },
+  pickerRowTextSelected: { color: colors.primary },
   submitButton: {
     marginTop: 16,
     marginBottom: 8,
