@@ -7,7 +7,8 @@ export type ResidentSupportConfig = {
 
 export type CreateSupportRequestInput = {
   residentId: string;
-  societyId: string;
+  /** Optional; server uses the resident's society from DB. */
+  societyId?: string;
   topic: string;
   message: string;
   residentName?: string;
@@ -58,7 +59,7 @@ export async function createSupportRequest(
     headers: await authHeaders(),
     body: JSON.stringify({
       residentId: input.residentId,
-      societyId: input.societyId,
+      ...(input.societyId ? { societyId: input.societyId } : {}),
       topic: input.topic,
       message: input.message,
       residentName: input.residentName,

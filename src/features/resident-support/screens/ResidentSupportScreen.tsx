@@ -145,11 +145,12 @@ export function ResidentSupportScreen() {
 
       const profile = await getResidentProfile(session.residentId).catch(() => null);
       const resolvedResidentId = profile?.id?.trim() || residentId || session.residentId;
-      const resolvedSocietyId =
-        profile?.societyId?.trim() || societyId || society?.id || session.societyId;
       const resolvedPhone = profile?.phoneNumber || phoneNumber || session.phoneNumber;
+      // Society on the ticket comes from the resident row on the server.
+      const resolvedSocietyId =
+        profile?.societyId?.trim() || societyId || session.societyId || undefined;
 
-      if (!resolvedResidentId || !resolvedSocietyId) {
+      if (!resolvedResidentId) {
         setError("Resident details are missing. Please sign in again.");
         return;
       }
