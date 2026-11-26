@@ -423,18 +423,30 @@ export async function getResidentHistory(residentId: string): Promise<HistoryIte
   });
 }
 
+export type PackageReturnReason =
+  | "NotAsExpected"
+  | "DamagedInside"
+  | "Expired"
+  | "TechnicalFault"
+  | "Other";
+
 /** Request a resident return for a delivered package. */
 export async function requestPackageReturn(
   packageId: string,
   residentId: string,
-  reason: "DamagedInside",
+  reason: PackageReturnReason = "DamagedInside",
+  note?: string,
 ): Promise<RequestPackageReturnResponse> {
   const response = await apiFetch(
     `${API}/packages/${encodeURIComponent(packageId)}/returns`,
     {
       method: "POST",
       headers: await authHeaders(),
-      body: JSON.stringify({ residentId, reason }),
+      body: JSON.stringify({
+        residentId,
+        reason,
+        ...(note?.trim() ? { note: note.trim() } : {}),
+      }),
     },
   );
   const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;

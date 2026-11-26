@@ -9,12 +9,39 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import type { ResidentStackParamList } from "@/app/navigation/types";
 import { getResidentSession } from "@/features/authentication/services/sessionStorage";
-import { getResidentHistory, requestPackageReturn, type HistoryItem } from "@/shared/services/packageApi";
+import { getReturnRequestEligibility } from "@/features/package-inbox/utils/residentReturnEligibility";
+import {
+  getResidentHistory,
+  requestPackageReturn,
+  type HistoryItem,
+  type HubPackage,
+} from "@/shared/services/packageApi";
 import { colors } from "@/shared/theme/colors";
 import { formatDisplayTimestamp } from "@/shared/utils/formatDisplayTimestamp";
+
+type Nav = NativeStackNavigationProp<ResidentStackParamList, "History">;
+
+function historyItemToHubPackage(item: HistoryItem): HubPackage {
+  return {
+    id: item.packageId || item.id,
+    courier: item.courier || "Courier",
+    tracking: item.trackingNumber || item.pkgNumber || item.packageId || "",
+    trackingNumber: item.trackingNumber,
+    courierAwb: item.courierAwb,
+    flat: "",
+    weight: "",
+    receivedAt: item.collectedAt,
+    deliveredAt: item.collectedAt,
+    category: item.category || "Miscellaneous",
+    pkgNumber: item.pkgNumber,
+    status: item.packageStatus || item.status || "Delivered",
+  };
+}
 
 type HistoryFilter = "all" | "thisMonth" | "lastMonth";
 
@@ -45,6 +72,7 @@ function historyTrackingLine(item: HistoryItem): string | null {
 }
 
 export function ResidentHistoryScreen() {
+  const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState<HistoryFilter>("all");
   const [items, setItems] = useState<HistoryItem[]>([]);
@@ -168,50 +196,65 @@ export function ResidentHistoryScreen() {
         ) : (
           displayedItems.map((item, index) => {
             const trackingLine = historyTrackingLine(item);
-            const requested = [item.returnStatus, item.packageStatus, item.status].some((status) =>
-              status?.toLowerCase().replace(/[_\s-]/g, "") === "returnrequested",
-            );
-            const delivered = !item.packageStatus || item.packageStatus.toLowerCase() === "delivered";
-            const deliveredAt = Date.parse(item.collectedAt);
-            const withinReturnWindow = Number.isFinite(deliveredAt) && Date.now() <= deliveredAt + 7 * 24 * 60 * 60 * 1000;
-            const canRequest = delivered && withinReturnWindow && !requested;
+            const eligibility = getReturnRequestEligibility({
+              status: item.status,
+              packageStatus: item.packageStatus,
+              returnStatus: item.returnStatus,
+              deliveredAt: item.collectedAt,
+              treatBlankAsDelivered: true,
+            });
             return (
               <View key={item.id || `${item.pkgNumber ?? "package"}-${index}`} style={styles.card}>
-                <View style={[styles.statusIcon, requested && styles.requestedStatusIcon]}>
-                  <Ionicons name={requested ? "return-up-back-outline" : "checkmark-circle-outline"} size={17} color={requested ? "#E11D48" : "#10B981"} />
+                <View style={[styles.statusIcon, eligibility.alreadyRequested && styles.requestedStatusIcon]}>
+                  <Ionicons
+                    name={eligibility.alreadyRequested ? "return-up-back-outline" : "checkmark-circle-outline"}
+                    size={17}
+                    color={eligibility.alreadyRequested ? "#E11D48" : "#10B981"}
+                  />
                 </View>
                 <View style={styles.cardContent}>
-                  <Text style={styles.courier}>{item.courier}</Text>
-                  {item.category ? (
-                    <Text style={styles.category} numberOfLines={1}>
-                      {item.category}
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Open package detail"
+                    onPress={() => {
+                      if (!item.packageId) return;
+                      navigation.navigate("PackageDetail", { pkg: historyItemToHubPackage(item) });
+                    }}
+                  >
+                    <Text style={styles.courier}>{item.courier}</Text>
+                    {item.category ? (
+                      <Text style={styles.category} numberOfLines={1}>
+                        {item.category}
+                      </Text>
+                    ) : null}
+                    {item.pkgNumber ? (
+                      <Text style={styles.packageNumber}>Package {item.pkgNumber}</Text>
+                    ) : null}
+                    {trackingLine ? (
+                      <Text style={styles.trackingLine} numberOfLines={2}>
+                        {trackingLine}
+                      </Text>
+                    ) : null}
+                    <Text style={styles.deliveryInfo}>
+                      {formatDisplayTimestamp(item.collectedAt)}
+                      {item.methodOfDelivery || item.method
+                        ? ` · ${item.methodOfDelivery || item.method}`
+                        : ""}
                     </Text>
-                  ) : null}
-                  {item.pkgNumber ? (
-                    <Text style={styles.packageNumber}>Package {item.pkgNumber}</Text>
-                  ) : null}
-                  {trackingLine ? (
-                    <Text style={styles.trackingLine} numberOfLines={2}>
-                      {trackingLine}
-                    </Text>
-                  ) : null}
-                  <Text style={styles.deliveryInfo}>
-                    {formatDisplayTimestamp(item.collectedAt)}
-                    {item.methodOfDelivery || item.method
-                      ? ` · ${item.methodOfDelivery || item.method}`
-                      : ""}
+                  </Pressable>
+                  <Text style={[styles.returnWindow, eligibility.alreadyRequested && styles.requestedText]}>
+                    {eligibility.message}
                   </Text>
-                  <Text style={[styles.returnWindow, requested && styles.requestedText]}>
-                    {requested ? "Return requested" : canRequest ? "Within 7-day return window" : "Return window closed"}
-                  </Text>
-                  {canRequest ? (
+                  {eligibility.canRequest ? (
                     <Pressable
                       accessibilityRole="button"
                       disabled={requestingId === item.packageId}
                       onPress={() => void submitReturn(item)}
                       style={[styles.returnButton, requestingId === item.packageId && styles.returnButtonDisabled]}
                     >
-                      <Text style={styles.returnButtonText}>{requestingId === item.packageId ? "Requesting…" : "Request return"}</Text>
+                      <Text style={styles.returnButtonText}>
+                        {requestingId === item.packageId ? "Requesting…" : "Request return"}
+                      </Text>
                     </Pressable>
                   ) : null}
                 </View>
