@@ -383,10 +383,24 @@ export function staffArrivalPhotoProxyUrl(packageId: string): string {
   return `${API}/packages/${encodeURIComponent(packageId)}/arrival-photo`;
 }
 
+export type ResidentHistoryRange = {
+  /** Inclusive calendar day, YYYY-MM-DD. */
+  fromDate?: string;
+  /** Inclusive calendar day, YYYY-MM-DD. */
+  toDate?: string;
+};
+
 /** Returns packages that have been collected or delivered by a resident. */
-export async function getResidentHistory(residentId: string): Promise<HistoryItem[]> {
+export async function getResidentHistory(
+  residentId: string,
+  range?: ResidentHistoryRange,
+): Promise<HistoryItem[]> {
+  const params = new URLSearchParams();
+  if (range?.fromDate?.trim()) params.set("fromDate", range.fromDate.trim());
+  if (range?.toDate?.trim()) params.set("toDate", range.toDate.trim());
+  const query = params.toString();
   const response = await apiFetch(
-    `${API}/residents/${encodeURIComponent(residentId)}/history`,
+    `${API}/residents/${encodeURIComponent(residentId)}/history${query ? `?${query}` : ""}`,
     { headers: await authHeaders() },
   );
   if (!response.ok) {
