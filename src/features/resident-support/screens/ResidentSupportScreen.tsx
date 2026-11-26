@@ -12,6 +12,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { getResidentProfile } from "@/features/authentication/services/residentAuthApi";
 import { getResidentSession } from "@/features/authentication/services/sessionStorage";
 import type { SupportTopicId } from "@/features/resident-support/models/support.types";
 import {
@@ -23,16 +24,22 @@ import {
   SUPPORT_FAQS,
   SUPPORT_TOPICS,
 } from "@/features/resident-support/utils/supportContent";
-import { getSocieties, type Society } from "@/shared/services/packageApi";
+import { getSocieties, getSocietyById, type Society } from "@/shared/services/packageApi";
 import { colors } from "@/shared/theme/colors";
 
 type SocietyContact = Pick<Society, "id" | "name" | "contactEmail" | "phone">;
+
+function sameId(left?: string | null, right?: string | null): boolean {
+  if (!left || !right) return false;
+  return left.trim().toLowerCase() === right.trim().toLowerCase();
+}
 
 export function ResidentSupportScreen() {
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
   const [residentName, setResidentName] = useState("");
   const [residentId, setResidentId] = useState("");
+  const [societyId, setSocietyId] = useState("");
   const [phoneNumber, setPhoneNumber] = useState<string | undefined>();
   const [towerWing, setTowerWing] = useState<string | undefined>();
   const [flatNumber, setFlatNumber] = useState<string | undefined>();
@@ -61,32 +68,47 @@ export function ResidentSupportScreen() {
         setSociety(null);
         return;
       }
-      setResidentName(session.fullName?.trim() || "Resident");
-      setResidentId(session.residentId);
-      setPhoneNumber(session.phoneNumber);
-      setTowerWing(session.towerWing);
-      setFlatNumber(session.flatNumber);
 
-      const [societies, supportConfig] = await Promise.all([
-        getSocieties(),
+      const profile = await getResidentProfile(session.residentId).catch(() => null);
+      const resolvedResidentId = profile?.id?.trim() || session.residentId;
+      const resolvedSocietyId = profile?.societyId?.trim() || session.societyId;
+
+      setResidentName(profile?.fullName?.trim() || session.fullName?.trim() || "Resident");
+      setResidentId(resolvedResidentId);
+      setSocietyId(resolvedSocietyId);
+      setPhoneNumber(profile?.phoneNumber || session.phoneNumber);
+      setTowerWing(profile?.towerWing || session.towerWing);
+      setFlatNumber(profile?.flatNumber || session.flatNumber);
+
+      const [societies, supportConfig, societyDetail] = await Promise.all([
+        getSocieties().catch(() => [] as Society[]),
         getResidentSupportConfig().catch(() => ({
           supportEmail: SPH_SUPPORT_EMAIL,
           supportPhone: undefined as string | undefined,
         })),
+        getSocietyById(resolvedSocietyId).catch(() => null),
       ]);
       setConfigEmail(supportConfig.supportEmail || SPH_SUPPORT_EMAIL);
       setConfigPhone(supportConfig.supportPhone);
 
-      const match = societies.find((row) => row.id === session.societyId) ?? null;
+      const match =
+        societies.find((row) => sameId(row.id, resolvedSocietyId)) ??
+        (societyDetail && sameId(societyDetail.id, resolvedSocietyId) ? societyDetail : null);
+
       setSociety(
         match
           ? {
-              id: match.id,
-              name: match.name,
+              id: match.id || resolvedSocietyId,
+              name: match.name?.trim() || "Society",
               contactEmail: match.contactEmail,
               phone: match.phone,
             }
-          : { id: session.societyId, name: "Your society" },
+          : {
+              id: resolvedSocietyId,
+              name: societyDetail?.name?.trim() || "Society",
+              contactEmail: societyDetail?.contactEmail,
+              phone: societyDetail?.phone,
+            },
       );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to load support contacts.");
@@ -110,27 +132,42 @@ export function ResidentSupportScreen() {
       setError("Add a short note (at least a sentence) so the hub team can help.");
       return;
     }
-    if (!society || !residentId) {
-      setError("Society details are missing. Pull to refresh or sign in again.");
-      return;
-    }
 
     setBusy(true);
     setError(null);
     setSuccess(null);
     try {
+      const session = await getResidentSession();
+      if (!session) {
+        setError("Your session has expired. Please sign in again.");
+        return;
+      }
+
+      const profile = await getResidentProfile(session.residentId).catch(() => null);
+      const resolvedResidentId = profile?.id?.trim() || residentId || session.residentId;
+      const resolvedSocietyId =
+        profile?.societyId?.trim() || societyId || society?.id || session.societyId;
+      const resolvedPhone = profile?.phoneNumber || phoneNumber || session.phoneNumber;
+
+      if (!resolvedResidentId || !resolvedSocietyId) {
+        setError("Resident details are missing. Please sign in again.");
+        return;
+      }
+
       const result = await createSupportRequest({
-        residentId,
-        societyId: society.id,
+        residentId: resolvedResidentId,
+        societyId: resolvedSocietyId,
         topic: topic.label,
         message: trimmed,
-        residentName,
-        residentPhone: phoneNumber,
-        towerWing,
-        flatNumber,
+        residentName: profile?.fullName?.trim() || residentName,
+        residentPhone: resolvedPhone,
+        towerWing: profile?.towerWing || towerWing,
+        flatNumber: profile?.flatNumber || flatNumber,
       });
       setMessage("");
-      setSuccess(result.message || `Request sent. We will follow up at ${result.supportEmail || supportEmail}.`);
+      setSuccess(
+        result.message || `Request sent. We will follow up at ${result.supportEmail || supportEmail}.`,
+      );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not submit your request.");
     } finally {
@@ -163,12 +200,7 @@ export function ResidentSupportScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.hero}>
-          <Text style={styles.heroEyebrow}>Support</Text>
           <Text style={styles.heroTitle}>Ask from where you are stuck</Text>
-          <Text style={styles.heroBody}>
-            Like Traizr in-app support: your society, flat, and topic go with the question so the hub
-            team does not need three messages of setup.
-          </Text>
         </View>
 
         {loading ? (
@@ -286,15 +318,7 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     marginBottom: 14,
   },
-  heroEyebrow: {
-    color: "rgba(255,255,255,0.55)",
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
-  },
-  heroTitle: { marginTop: 6, color: "#fff", fontSize: 20, fontWeight: "700" },
-  heroBody: { marginTop: 8, color: "rgba(255,255,255,0.72)", fontSize: 13, lineHeight: 19 },
+  heroTitle: { color: "#fff", fontSize: 20, fontWeight: "700" },
   loader: { marginTop: 28 },
   contextCard: {
     backgroundColor: colors.surface,

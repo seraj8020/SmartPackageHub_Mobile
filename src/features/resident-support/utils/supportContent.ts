@@ -51,7 +51,7 @@ export const SUPPORT_FAQS: SupportFaqItem[] = [
     id: "who-answers",
     question: "Who answers Support?",
     answer:
-      "Your society hub team (like Traizr in-app support). Your message includes society, flat, and topic so they do not need three messages of setup context.",
+      "Your society hub team. Your message includes society, flat, and topic so they do not need three messages of setup context.",
   },
   {
     id: "return-window",

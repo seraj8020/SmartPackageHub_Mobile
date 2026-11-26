@@ -274,6 +274,27 @@ export async function getSocieties(): Promise<Society[]> {
   }));
 }
 
+export async function getSocietyById(societyId: string): Promise<Society | null> {
+  const response = await apiFetch(`${API}/societies/${encodeURIComponent(societyId)}`, {
+    headers: await authHeaders(),
+  });
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    const err = (await response.json().catch(() => ({}))) as {
+      message?: string;
+      Message?: string;
+    };
+    throw new Error(err.message ?? err.Message ?? `Failed to fetch society (${response.status})`);
+  }
+  const row = (await response.json()) as Record<string, unknown>;
+  return {
+    id: textOf(row, "id", "Id") || societyId,
+    name: textOf(row, "name", "Name"),
+    contactEmail: textOf(row, "contactEmail", "ContactEmail") || undefined,
+    phone: textOf(row, "phone", "Phone") || undefined,
+  };
+}
+
 export async function getResidentPackages(residentId: string): Promise<HubPackage[]> {
   const response = await apiFetch(
     `${API}/residents/${encodeURIComponent(residentId)}/packages`,
