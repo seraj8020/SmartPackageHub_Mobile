@@ -3,6 +3,10 @@ import { API, apiFetch, authHeaders, authTokenHeader } from "@/shared/services/a
 export interface Society {
   id: string;
   name: string;
+  /** Society hub contact email (resident Support). */
+  contactEmail?: string;
+  /** Society hub phone (resident Support). */
+  phone?: string;
 }
 
 export type PackageLifecycleStatus = "Received" | "Shelved" | "Dispatched" | "Delivered" | string;
@@ -293,9 +297,32 @@ export async function getSocieties(): Promise<Society[]> {
       return {
         id,
         name: textOf(record, "name", "Name") || "Society",
+        contactEmail: textOf(record, "contactEmail", "ContactEmail") || undefined,
+        phone: textOf(record, "phone", "Phone") || undefined,
       };
     })
     .filter((society) => society.id.length > 0);
+}
+
+export async function getSocietyById(societyId: string): Promise<Society | null> {
+  const response = await apiFetch(`${API}/societies/${encodeURIComponent(societyId)}`, {
+    headers: await authHeaders(),
+  });
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    const err = (await response.json().catch(() => ({}))) as {
+      message?: string;
+      Message?: string;
+    };
+    throw new Error(err.message ?? err.Message ?? `Failed to fetch society (${response.status})`);
+  }
+  const row = (await response.json()) as Record<string, unknown>;
+  return {
+    id: textOf(row, "id", "Id") || societyId,
+    name: textOf(row, "name", "Name"),
+    contactEmail: textOf(row, "contactEmail", "ContactEmail") || undefined,
+    phone: textOf(row, "phone", "Phone") || undefined,
+  };
 }
 
 export async function getResidentPackages(residentId: string): Promise<HubPackage[]> {
@@ -407,10 +434,24 @@ export function staffArrivalPhotoProxyUrl(packageId: string): string {
   return `${API}/packages/${encodeURIComponent(packageId)}/arrival-photo`;
 }
 
+export type ResidentHistoryRange = {
+  /** Inclusive calendar day, YYYY-MM-DD. */
+  fromDate?: string;
+  /** Inclusive calendar day, YYYY-MM-DD. */
+  toDate?: string;
+};
+
 /** Returns packages that have been collected or delivered by a resident. */
-export async function getResidentHistory(residentId: string): Promise<HistoryItem[]> {
+export async function getResidentHistory(
+  residentId: string,
+  range?: ResidentHistoryRange,
+): Promise<HistoryItem[]> {
+  const params = new URLSearchParams();
+  if (range?.fromDate?.trim()) params.set("fromDate", range.fromDate.trim());
+  if (range?.toDate?.trim()) params.set("toDate", range.toDate.trim());
+  const query = params.toString();
   const response = await apiFetch(
-    `${API}/residents/${encodeURIComponent(residentId)}/history`,
+    `${API}/residents/${encodeURIComponent(residentId)}/history${query ? `?${query}` : ""}`,
     { headers: await authHeaders() },
   );
   if (!response.ok) {

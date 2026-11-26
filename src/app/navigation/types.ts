@@ -15,6 +15,7 @@ export type ResidentStackParamList = {
   History: undefined;
   Vacation: undefined;
   Profile: undefined;
+  Support: undefined;
   DeliveryPreference: { pkg: HubPackage };
   PackageDetail: { pkg: HubPackage };
   AuthorizeCollector: { pkg: HubPackage };

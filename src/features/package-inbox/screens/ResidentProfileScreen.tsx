@@ -8,8 +8,10 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import type { ResidentStackParamList } from "@/app/navigation/types";
 import type { ResidentSessionState } from "@/features/authentication/models/auth.types";
 import { getResidentProfile } from "@/features/authentication/services/residentAuthApi";
 import {
@@ -19,6 +21,8 @@ import {
 import { getSocieties } from "@/shared/services/packageApi";
 import { colors } from "@/shared/theme/colors";
 import { societyLocationLabel } from "@/shared/utils/greeting";
+
+type Nav = NativeStackNavigationProp<ResidentStackParamList, "Profile">;
 
 const FEATURES = [
   { label: "OTP Pickup", guest: false, basic: true, premium: true },
@@ -37,6 +41,7 @@ function initialsFrom(fullName?: string) {
 }
 
 export function ResidentProfileScreen() {
+  const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
   const [session, setSession] = useState<ResidentSessionState | null>(null);
   const [societyName, setSocietyName] = useState("");
@@ -171,6 +176,27 @@ export function ResidentProfileScreen() {
         </View>
 
         <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Help</Text>
+          <Pressable
+            style={styles.supportButton}
+            onPress={() => navigation.navigate("Support")}
+            accessibilityRole="button"
+            accessibilityLabel="Open support"
+          >
+            <View style={styles.supportIcon}>
+              <Ionicons name="help-buoy-outline" size={18} color={colors.primary} />
+            </View>
+            <View style={styles.supportText}>
+              <Text style={styles.supportTitle}>Ask hub support</Text>
+              <Text style={styles.supportBody}>
+                In-app help with your society and flat context attached
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#D1D5DB" />
+          </Pressable>
+        </View>
+
+        <View style={styles.section}>
           <Pressable
             style={styles.switchButton}
             onPress={() => setIsGuest((current) => !current)}
@@ -265,6 +291,28 @@ const styles = StyleSheet.create({
   },
   cell: { flex: 1, alignItems: "center" },
   cross: { color: "#D1D5DB", fontSize: 12, fontWeight: "700" },
+  supportButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    backgroundColor: colors.surface,
+  },
+  supportIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.primaryMuted,
+  },
+  supportText: { flex: 1, minWidth: 0 },
+  supportTitle: { color: colors.text, fontSize: 14, fontWeight: "700" },
+  supportBody: { marginTop: 2, color: colors.textMuted, fontSize: 12, lineHeight: 17 },
   switchButton: {
     borderWidth: 1,
     borderColor: colors.border,
