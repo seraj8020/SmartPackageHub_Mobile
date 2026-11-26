@@ -62,9 +62,11 @@ export function ResidentSupportScreen() {
   const [towerWing, setTowerWing] = useState<string | undefined>();
   const [flatNumber, setFlatNumber] = useState<string | undefined>();
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
-  const [statusFilter, setStatusFilter] = useState<"all" | "Open">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "open">("all");
   const [search, setSearch] = useState("");
   const [composerOpen, setComposerOpen] = useState(false);
+  const [statusPickerOpen, setStatusPickerOpen] = useState(false);
+  const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
   const [urgencyPickerOpen, setUrgencyPickerOpen] = useState(false);
   const [subject, setSubject] = useState("");
@@ -82,7 +84,8 @@ export function ResidentSupportScreen() {
   const visibleTickets = useMemo(() => {
     const q = search.trim().toLowerCase();
     return tickets.filter((ticket) => {
-      if (statusFilter !== "all" && ticket.status !== statusFilter) return false;
+      const status = (ticket.status || "Open").trim().toLowerCase();
+      if (statusFilter === "open" && status !== "open") return false;
       if (!q) return true;
       return (
         ticket.referenceCode.toLowerCase().includes(q) ||
@@ -90,6 +93,8 @@ export function ResidentSupportScreen() {
       );
     });
   }, [search, statusFilter, tickets]);
+
+  const statusFilterLabel = statusFilter === "open" ? "Open" : "All";
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -236,22 +241,12 @@ export function ResidentSupportScreen() {
 
         <View style={styles.toolbar}>
           <Pressable
-            style={[styles.filterChip, statusFilter === "all" && styles.filterChipActive]}
-            onPress={() => setStatusFilter("all")}
+            style={styles.statusDropdown}
+            onPress={() => setStatusPickerOpen(true)}
+            accessibilityRole="button"
           >
-            <Text style={[styles.filterChipText, statusFilter === "all" && styles.filterChipTextActive]}>
-              All
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[styles.filterChip, statusFilter === "Open" && styles.filterChipActive]}
-            onPress={() => setStatusFilter("Open")}
-          >
-            <Text
-              style={[styles.filterChipText, statusFilter === "Open" && styles.filterChipTextActive]}
-            >
-              Open
-            </Text>
+            <Text style={styles.statusDropdownText}>{statusFilterLabel}</Text>
+            <Ionicons name="chevron-down" size={14} color={colors.textMuted} />
           </Pressable>
           <TextInput
             style={styles.searchInput}
@@ -273,12 +268,23 @@ export function ResidentSupportScreen() {
         ) : visibleTickets.length === 0 ? (
           <View style={styles.empty}>
             <Ionicons name="life-buoy-outline" size={22} color="#9CA3AF" />
-            <Text style={styles.emptyTitle}>No support requests yet</Text>
-            <Text style={styles.emptyBody}>Tap New support request to raise one.</Text>
+            <Text style={styles.emptyTitle}>
+              {statusFilter === "open" ? "No open requests" : "No support requests yet"}
+            </Text>
+            <Text style={styles.emptyBody}>
+              {statusFilter === "open"
+                ? "Switch the filter to All, or raise a new support request."
+                : "Tap New support request to raise one."}
+            </Text>
           </View>
         ) : (
           visibleTickets.map((ticket) => (
-            <View key={ticket.id || ticket.referenceCode} style={styles.ticketCard}>
+            <Pressable
+              key={ticket.id || ticket.referenceCode}
+              style={styles.ticketCard}
+              onPress={() => setSelectedTicket(ticket)}
+              accessibilityRole="button"
+            >
               <View style={styles.ticketTop}>
                 <Text style={styles.reference}>{ticket.referenceCode || "—"}</Text>
                 <View style={styles.openBadge}>
@@ -292,7 +298,7 @@ export function ResidentSupportScreen() {
                 </View>
                 <Text style={styles.ticketWhen}>{formatTicketWhen(ticket.requestedAtUtc)}</Text>
               </View>
-            </View>
+            </Pressable>
           ))
         )}
       </ScrollView>
@@ -365,6 +371,78 @@ export function ResidentSupportScreen() {
                   <Text style={styles.submitButtonText}>Submit request</Text>
                 )}
               </Pressable>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={statusPickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setStatusPickerOpen(false)}
+      >
+        <Pressable style={styles.pickerBackdrop} onPress={() => setStatusPickerOpen(false)}>
+          <View style={styles.pickerCard}>
+            <Text style={styles.pickerTitle}>Filter</Text>
+            {(
+              [
+                { id: "all" as const, label: "All" },
+                { id: "open" as const, label: "Open" },
+              ] as const
+            ).map((item) => {
+              const selected = statusFilter === item.id;
+              return (
+                <Pressable
+                  key={item.id}
+                  style={[styles.pickerRow, selected && styles.pickerRowSelected]}
+                  onPress={() => {
+                    setStatusFilter(item.id);
+                    setStatusPickerOpen(false);
+                  }}
+                >
+                  <Text style={[styles.pickerRowText, selected && styles.pickerRowTextSelected]}>
+                    {item.label}
+                  </Text>
+                  {selected ? <Ionicons name="checkmark" size={16} color={colors.primary} /> : null}
+                </Pressable>
+              );
+            })}
+          </View>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={selectedTicket != null}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setSelectedTicket(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{selectedTicket?.referenceCode || "Request"}</Text>
+              <Pressable onPress={() => setSelectedTicket(null)} hitSlop={10}>
+                <Ionicons name="close" size={22} color={colors.textMuted} />
+              </Pressable>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.detailRow}>
+                <View style={styles.openBadge}>
+                  <Text style={styles.openBadgeText}>{selectedTicket?.status || "Open"}</Text>
+                </View>
+                <View style={styles.urgencyBadge}>
+                  <Text style={styles.urgencyBadgeText}>{selectedTicket?.urgency || "Normal"}</Text>
+                </View>
+              </View>
+              <Text style={styles.label}>Subject</Text>
+              <Text style={styles.detailValue}>{selectedTicket?.subject || "—"}</Text>
+              <Text style={styles.label}>Category</Text>
+              <Text style={styles.detailValue}>{selectedTicket?.category || "—"}</Text>
+              <Text style={styles.label}>Message</Text>
+              <Text style={styles.detailMessage}>{selectedTicket?.message || "—"}</Text>
+              <Text style={styles.label}>Submitted</Text>
+              <Text style={styles.detailValue}>{formatTicketWhen(selectedTicket?.requestedAtUtc)}</Text>
             </ScrollView>
           </View>
         </View>
@@ -460,17 +538,20 @@ const styles = StyleSheet.create({
   },
   newButtonText: { color: "#fff", fontSize: 14, fontWeight: "700" },
   toolbar: { marginTop: 14, flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center" },
-  filterChip: {
+  statusDropdown: {
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
     borderRadius: 10,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 10,
+    minWidth: 96,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
   },
-  filterChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  filterChipText: { color: colors.textMuted, fontSize: 12, fontWeight: "700" },
-  filterChipTextActive: { color: "#fff" },
+  statusDropdownText: { color: colors.text, fontSize: 13, fontWeight: "700" },
   searchInput: {
     flexGrow: 1,
     minWidth: 160,
@@ -522,6 +603,9 @@ const styles = StyleSheet.create({
   },
   urgencyBadgeText: { color: "#4B5563", fontSize: 11, fontWeight: "700" },
   ticketWhen: { color: colors.textMuted, fontSize: 11 },
+  detailRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 },
+  detailValue: { color: colors.text, fontSize: 14, fontWeight: "600" },
+  detailMessage: { color: colors.text, fontSize: 14, lineHeight: 21 },
   errorBox: {
     marginTop: 14,
     borderRadius: 12,
