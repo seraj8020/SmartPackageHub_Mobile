@@ -73,6 +73,7 @@ export interface ResidentPackageDetail extends HubPackage {
 
 export interface HistoryItem {
   id: string;
+  packageId: string;
   courier: string;
   collectedAt: string;
   category: string;
@@ -83,6 +84,16 @@ export interface HistoryItem {
   /** Courier AWB / airway bill. */
   courierAwb?: string;
   methodOfDelivery?: string;
+  status?: string;
+  packageStatus?: string;
+  returnStatus?: string;
+}
+
+export interface RequestPackageReturnResponse {
+  id?: string;
+  packageId?: string;
+  status?: string;
+  message?: string;
 }
 
 export interface PackageStatusUpdateResponse {
@@ -396,16 +407,48 @@ export async function getResidentHistory(residentId: string): Promise<HistoryIte
     const method = textOf(row, "method", "Method", "methodOfDelivery", "MethodOfDelivery");
     return {
       id: textOf(row, "id", "Id") || textOf(row, "packageId", "PackageId"),
+      packageId: textOf(row, "packageId", "PackageId") || textOf(row, "id", "Id"),
       courier: textOf(row, "courier", "Courier") || "Courier",
       collectedAt: textOf(row, "collectedAt", "CollectedAt", "deliveredAt", "DeliveredAt"),
       category: textOf(row, "category", "Category", "status", "Status") || "Miscellaneous",
       method,
       pkgNumber: textOf(row, "pkgNumber", "PkgNumber") || undefined,
+      status: textOf(row, "status", "Status") || undefined,
+      packageStatus: textOf(row, "packageStatus", "PackageStatus") || undefined,
+      returnStatus: textOf(row, "returnStatus", "ReturnStatus") || undefined,
       trackingNumber: textOf(row, "trackingNumber", "TrackingNumber") || undefined,
       courierAwb: textOf(row, "courierAwb", "CourierAwb", "awb", "Awb") || undefined,
       methodOfDelivery: method || undefined,
     };
   });
+}
+
+/** Request a resident return for a delivered package. */
+export async function requestPackageReturn(
+  packageId: string,
+  residentId: string,
+  reason: "DamagedInside",
+): Promise<RequestPackageReturnResponse> {
+  const response = await apiFetch(
+    `${API}/packages/${encodeURIComponent(packageId)}/returns`,
+    {
+      method: "POST",
+      headers: await authHeaders(),
+      body: JSON.stringify({ residentId, reason }),
+    },
+  );
+  const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!response.ok) {
+    throw new Error(
+      textOf(body, "message", "Message") || `Unable to request return (${response.status}).`,
+    );
+  }
+  return {
+    id: textOf(body, "id", "Id") || undefined,
+    packageId: textOf(body, "packageId", "PackageId") || packageId,
+    status: textOf(body, "status", "Status") || "ReturnRequested",
+    message: textOf(body, "message", "Message") || "Return request received.",
+  };
 }
 
 export async function getSocietyPackages(societyId: string): Promise<HubPackage[]> {

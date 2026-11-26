@@ -12,7 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getResidentSession } from "@/features/authentication/services/sessionStorage";
-import { getResidentHistory, type HistoryItem } from "@/shared/services/packageApi";
+import { getResidentHistory, requestPackageReturn, type HistoryItem } from "@/shared/services/packageApi";
 import { colors } from "@/shared/theme/colors";
 import { formatDisplayTimestamp } from "@/shared/utils/formatDisplayTimestamp";
 
@@ -51,6 +51,8 @@ export function ResidentHistoryScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [requestingId, setRequestingId] = useState<string | null>(null);
+  const [submittedReturn, setSubmittedReturn] = useState<HistoryItem | null>(null);
 
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -80,6 +82,50 @@ export function ResidentHistoryScreen() {
     () => items.filter((item) => isInFilter(item, filter)),
     [filter, items],
   );
+
+  const submitReturn = useCallback(async (item: HistoryItem) => {
+    if (!item.packageId) return;
+    setRequestingId(item.packageId);
+    try {
+      const session = await getResidentSession();
+      if (!session) throw new Error("Your session has expired. Please sign in again.");
+      await requestPackageReturn(item.packageId, session.residentId, "DamagedInside");
+      setItems((current) => current.map((row) => row.packageId === item.packageId
+        ? { ...row, returnStatus: "ReturnRequested", status: "ReturnRequested" }
+        : row));
+      setSubmittedReturn(item);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to request return.");
+    } finally {
+      setRequestingId(null);
+    }
+  }, []);
+
+  if (submittedReturn) {
+    return (
+      <View style={[styles.root, { paddingTop: insets.top }]}>
+        <View style={styles.confirmHero}>
+          <Text style={styles.confirmTitle}>Return requested</Text>
+          <Text style={styles.subtitle}>We’ll notify society staff</Text>
+        </View>
+        <View style={styles.confirmContent}>
+          <View style={styles.confirmCard}>
+            <Ionicons name="checkmark-outline" size={36} color={colors.primary} />
+            <Text style={styles.confirmHeading}>Request received</Text>
+            <Text style={styles.confirmBody}>Staff will guide pickup/drop at the hub desk.</Text>
+            <Text style={styles.requestedBadge}>Return requested</Text>
+          </View>
+          <View style={styles.noticeCard}>
+            <Text style={styles.noticeLabel}>Push / SMS</Text>
+            <Text style={styles.noticeBody}>“Return request received. Staff will guide pickup/drop.”</Text>
+          </View>
+          <Pressable onPress={() => setSubmittedReturn(null)} style={styles.backButton}>
+            <Text style={styles.backButtonText}>Return to history</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -122,10 +168,17 @@ export function ResidentHistoryScreen() {
         ) : (
           displayedItems.map((item, index) => {
             const trackingLine = historyTrackingLine(item);
+            const requested = [item.returnStatus, item.packageStatus, item.status].some((status) =>
+              status?.toLowerCase().replace(/[_\s-]/g, "") === "returnrequested",
+            );
+            const delivered = !item.packageStatus || item.packageStatus.toLowerCase() === "delivered";
+            const deliveredAt = Date.parse(item.collectedAt);
+            const withinReturnWindow = Number.isFinite(deliveredAt) && Date.now() <= deliveredAt + 7 * 24 * 60 * 60 * 1000;
+            const canRequest = delivered && withinReturnWindow && !requested;
             return (
               <View key={item.id || `${item.pkgNumber ?? "package"}-${index}`} style={styles.card}>
-                <View style={styles.statusIcon}>
-                  <Ionicons name="checkmark-circle-outline" size={17} color="#10B981" />
+                <View style={[styles.statusIcon, requested && styles.requestedStatusIcon]}>
+                  <Ionicons name={requested ? "return-up-back-outline" : "checkmark-circle-outline"} size={17} color={requested ? "#E11D48" : "#10B981"} />
                 </View>
                 <View style={styles.cardContent}>
                   <Text style={styles.courier}>{item.courier}</Text>
@@ -148,6 +201,19 @@ export function ResidentHistoryScreen() {
                       ? ` · ${item.methodOfDelivery || item.method}`
                       : ""}
                   </Text>
+                  <Text style={[styles.returnWindow, requested && styles.requestedText]}>
+                    {requested ? "Return requested" : canRequest ? "Within 7-day return window" : "Return window closed"}
+                  </Text>
+                  {canRequest ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      disabled={requestingId === item.packageId}
+                      onPress={() => void submitReturn(item)}
+                      style={[styles.returnButton, requestingId === item.packageId && styles.returnButtonDisabled]}
+                    >
+                      <Text style={styles.returnButtonText}>{requestingId === item.packageId ? "Requesting…" : "Request return"}</Text>
+                    </Pressable>
+                  ) : null}
                 </View>
               </View>
             );
@@ -217,6 +283,24 @@ const styles = StyleSheet.create({
     fontVariant: ["tabular-nums"],
   },
   deliveryInfo: { marginTop: 4, color: "#9CA3AF", fontSize: 11 },
+  returnWindow: { marginTop: 5, color: "#526477", fontSize: 11, fontFamily: "monospace" },
+  requestedText: { color: "#E11D48", fontWeight: "700" },
+  requestedStatusIcon: { backgroundColor: "#FFF1F2" },
+  returnButton: { marginTop: 9, minHeight: 42, borderRadius: 11, alignItems: "center", justifyContent: "center", backgroundColor: colors.primary },
+  returnButtonDisabled: { opacity: 0.65 },
+  returnButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
+  confirmHero: { backgroundColor: colors.primary, paddingHorizontal: 20, paddingTop: 22, paddingBottom: 18 },
+  confirmTitle: { color: "#FFFFFF", fontSize: 17, fontWeight: "800" },
+  confirmContent: { padding: 16 },
+  confirmCard: { minHeight: 190, padding: 20, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
+  confirmHeading: { marginTop: 8, color: colors.primary, fontSize: 15, fontWeight: "800" },
+  confirmBody: { marginTop: 8, color: "#526477", fontSize: 12, textAlign: "center", fontFamily: "monospace" },
+  requestedBadge: { marginTop: 13, color: "#E11D48", fontSize: 10, fontWeight: "800", borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: "#FECDD3", backgroundColor: "#FFF1F2", paddingHorizontal: 10, paddingVertical: 5 },
+  noticeCard: { marginTop: 10, padding: 14, borderRadius: 13, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  noticeLabel: { color: "#526477", fontSize: 11, fontFamily: "monospace" },
+  noticeBody: { marginTop: 6, color: colors.primary, fontSize: 12, lineHeight: 18 },
+  backButton: { marginTop: 10, minHeight: 44, borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  backButtonText: { color: colors.primary, fontSize: 13, fontWeight: "800" },
   empty: { alignItems: "center", paddingHorizontal: 20, paddingVertical: 30, borderRadius: 13, borderWidth: 1, borderColor: "#E5E7EB", backgroundColor: colors.surface },
   emptyTitle: { marginTop: 8, color: "#4B5563", fontSize: 14, fontWeight: "600" },
   emptyBody: { marginTop: 4, color: "#9CA3AF", fontSize: 12, textAlign: "center" },
