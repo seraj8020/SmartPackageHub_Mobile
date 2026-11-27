@@ -9,6 +9,8 @@ import { DoorDeliverySlotScreen } from "@/features/delivery-slots/screens/DoorDe
 import { AuthorizeCollectorScreen } from "@/features/authorized-collector/screens/AuthorizeCollectorScreen";
 import { VacationHoldScreen } from "@/features/vacation-hold/screens/VacationHoldScreen";
 import { ResidentSupportScreen } from "@/features/resident-support/screens/ResidentSupportScreen";
+import { ResidentReturnRequestScreen } from "@/features/package-returns/screens/ResidentReturnRequestScreen";
+import { ResidentReturnRequestedScreen } from "@/features/package-returns/screens/ResidentReturnRequestedScreen";
 import { colors } from "@/shared/theme/colors";
 import { hubColors } from "@/shared/ui/hub/hubTheme";
 
@@ -47,6 +49,16 @@ export function ResidentStackNavigator() {
         options={{ ...detailScreenOptions, title: "Authorize collector", headerBackTitle: "Package" }}
       />
       <Stack.Screen name="History" component={ResidentHistoryScreen} options={{ ...detailScreenOptions, title: "History" }} />
+      <Stack.Screen
+        name="ReturnRequest"
+        component={ResidentReturnRequestScreen}
+        options={{ ...detailScreenOptions, title: "Request return", headerBackTitle: "History" }}
+      />
+      <Stack.Screen
+        name="ReturnRequested"
+        component={ResidentReturnRequestedScreen}
+        options={{ ...detailScreenOptions, title: "Return requested", headerBackVisible: false }}
+      />
       <Stack.Screen
         name="Vacation"
         component={VacationHoldScreen}

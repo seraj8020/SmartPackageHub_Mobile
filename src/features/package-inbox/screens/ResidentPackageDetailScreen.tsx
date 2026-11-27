@@ -15,8 +15,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { ResidentStackParamList } from "@/app/navigation/types";
 import { getResidentSession } from "@/features/authentication/services/sessionStorage";
 import { RequestReturnPanel } from "@/features/package-returns/components/RequestReturnPanel";
-import { useResidentReturnRequest } from "@/features/package-returns/hooks/useResidentReturnRequest";
-import { isDeliveredLifecycleStatus } from "@/features/package-returns/utils/residentReturnEligibility";
+import { getReturnRequestEligibility, isDeliveredLifecycleStatus } from "@/features/package-returns/utils/residentReturnEligibility";
 import {
   arrivalPhotoRequestHeaders,
   damagePhotoRequestHeaders,
@@ -173,21 +172,13 @@ export function ResidentPackageDetailScreen({ route }: Props) {
     Boolean(arrivalUrl) || arrivalFailed || Boolean(current.hasArrivalPhoto);
   const showDamage = Boolean(current.isDamaged);
   const hasCollector = Boolean(current.authorizedCollectorName);
-  const returnRequest = useResidentReturnRequest({
-    packageId: pkg.id,
+  const returnEligibility = getReturnRequestEligibility({
     status: current.status,
     deliveredAt: current.deliveredAt,
     treatBlankAsDelivered: false,
-    onSucceeded: () => {
-      setDetail((prev) =>
-        prev
-          ? { ...prev, status: "ReturnRequested" }
-          : ({ ...pkg, status: "ReturnRequested", isDamaged: Boolean(pkg.isDamaged) } as ResidentPackageDetail),
-      );
-    },
   });
   const isDeliveredLifecycle =
-    isDeliveredLifecycleStatus(returnRequest.status ?? current.status) || returnRequest.submitted;
+    isDeliveredLifecycleStatus(current.status);
 
   return (
     <View style={styles.root}>
@@ -200,7 +191,7 @@ export function ResidentPackageDetailScreen({ route }: Props) {
         </View>
         <View style={styles.statusRow}>
           <Text style={styles.status}>
-            {returnRequest.submitted ? "ReturnRequested" : current.status ?? "Shelved"}
+            {current.status ?? "Shelved"}
             {current.shelfCode ? ` · ${current.shelfCode}` : ""}
           </Text>
           {current.isDamaged ? <Text style={styles.damaged}>Damaged on arrival</Text> : null}
@@ -250,11 +241,13 @@ export function ResidentPackageDetailScreen({ route }: Props) {
 
         {!loading && isDeliveredLifecycle ? (
           <RequestReturnPanel
-            eligibility={returnRequest.eligibility}
-            busy={returnRequest.busy}
-            error={returnRequest.error}
-            submitted={returnRequest.submitted}
-            onRequest={() => void returnRequest.submit()}
+            eligibility={returnEligibility}
+            onRequest={() =>
+              navigation.navigate("ReturnRequest", {
+                packageId: pkg.id,
+                packageLabel: pkg.pkgNumber || pkg.tracking || pkg.courier,
+              })
+            }
           />
         ) : null}
 

@@ -10,12 +10,11 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getResidentSession } from "@/features/authentication/services/sessionStorage";
 import { RequestReturnPanel } from "@/features/package-returns/components/RequestReturnPanel";
-import { ReturnRequestedConfirm } from "@/features/package-returns/components/ReturnRequestedConfirm";
-import { requestPackageReturn } from "@/features/package-returns/services/packageReturnApi";
 import { getReturnRequestEligibility } from "@/features/package-returns/utils/residentReturnEligibility";
 import {
   getResidentHistory,
@@ -24,8 +23,10 @@ import {
 } from "@/shared/services/packageApi";
 import { colors } from "@/shared/theme/colors";
 import { formatDisplayTimestamp } from "@/shared/utils/formatDisplayTimestamp";
+import type { ResidentStackParamList } from "@/app/navigation/types";
 
 type HistoryPreset = "all" | "thisMonth" | "lastMonth" | "custom";
+type Navigation = NativeStackNavigationProp<ResidentStackParamList, "History">;
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -78,6 +79,7 @@ function historyTrackingLine(item: HistoryItem): string | null {
 }
 
 export function ResidentHistoryScreen() {
+  const navigation = useNavigation<Navigation>();
   const insets = useSafeAreaInsets();
   const [preset, setPreset] = useState<HistoryPreset>("all");
   const [fromDate, setFromDate] = useState("");
@@ -88,8 +90,6 @@ export function ResidentHistoryScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [requestingId, setRequestingId] = useState<string | null>(null);
-  const [submittedReturn, setSubmittedReturn] = useState<HistoryItem | null>(null);
 
   const load = useCallback(async (range?: ResidentHistoryRange, isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -142,42 +142,10 @@ export function ResidentHistoryScreen() {
     void load(range);
   }
 
-  const submitReturn = useCallback(async (item: HistoryItem) => {
-    if (!item.packageId) return;
-    setRequestingId(item.packageId);
-    setError(null);
-    try {
-      const session = await getResidentSession();
-      if (!session) throw new Error("Your session has expired. Please sign in again.");
-      await requestPackageReturn(item.packageId, session.residentId, "DamagedInside");
-      setItems((current) =>
-        current.map((row) =>
-          row.packageId === item.packageId
-            ? {
-                ...row,
-                returnStatus: "ReturnRequested",
-                status: "ReturnRequested",
-                packageStatus: "ReturnRequested",
-              }
-            : row,
-        ),
-      );
-      setSubmittedReturn(item);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to request return.");
-    } finally {
-      setRequestingId(null);
-    }
-  }, []);
-
   const rangeHint =
     appliedRange?.fromDate && appliedRange?.toDate
       ? `${appliedRange.fromDate} → ${appliedRange.toDate}`
       : "All dates";
-
-  if (submittedReturn) {
-    return <ReturnRequestedConfirm onBack={() => setSubmittedReturn(null)} />;
-  }
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -316,8 +284,12 @@ export function ResidentHistoryScreen() {
                   <RequestReturnPanel
                     compact
                     eligibility={eligibility}
-                    busy={requestingId === item.packageId}
-                    onRequest={() => void submitReturn(item)}
+                    onRequest={() =>
+                      navigation.navigate("ReturnRequest", {
+                        packageId: item.packageId,
+                        packageLabel: item.pkgNumber || item.trackingNumber || item.courier,
+                      })
+                    }
                   />
                 </View>
               </View>

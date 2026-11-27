@@ -19,6 +19,15 @@ export type ResidentStackParamList = {
   DeliveryPreference: { pkg: HubPackage };
   PackageDetail: { pkg: HubPackage };
   AuthorizeCollector: { pkg: HubPackage };
+  ReturnRequest: {
+    packageId: string;
+    packageLabel: string;
+  };
+  ReturnRequested: {
+    packageLabel: string;
+    reasonLabel: string;
+    note?: string;
+  };
 };
 
 /** @deprecated Use ResidentStackParamList — kept temporarily for any lingering imports. */
