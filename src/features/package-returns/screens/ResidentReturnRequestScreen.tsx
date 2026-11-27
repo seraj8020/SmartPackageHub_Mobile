@@ -15,19 +15,13 @@ import type { ResidentStackParamList } from "@/app/navigation/types";
 import { getResidentSession } from "@/features/authentication/services/sessionStorage";
 import type { PackageReturnReason } from "@/features/package-returns/models/packageReturn.types";
 import { requestPackageReturn } from "@/features/package-returns/services/packageReturnApi";
+import { PACKAGE_RETURN_REASON_OPTIONS } from "@/features/package-returns/utils/returnReasonLabels";
 import { colors } from "@/shared/theme/colors";
 
 type Props = NativeStackScreenProps<ResidentStackParamList, "ReturnRequest">;
 
 const MAX_OTHER_NOTE_LENGTH = 240;
-
-const reasons: Array<{ value: PackageReturnReason; label: string }> = [
-  { value: "NotAsExpected", label: "Not as expected / don't like" },
-  { value: "DamagedInside", label: "Damaged inside" },
-  { value: "Expired", label: "Expired" },
-  { value: "TechnicalFault", label: "Mechanical / technical fault" },
-  { value: "Other", label: "Other" },
-];
+const reasons = PACKAGE_RETURN_REASON_OPTIONS;
 
 export function ResidentReturnRequestScreen({ navigation, route }: Props) {
   const { packageId, packageLabel } = route.params;

@@ -415,7 +415,7 @@ function StaffReceivedBody({
             <View style={styles.errorBox}>
               <Text style={styles.errorText}>{error}</Text>
             </View>
-          ) : null
+          ) : undefined
         }
         renderItem={({ item: pkg }) => {
           const open = selectedId === pkg.id;

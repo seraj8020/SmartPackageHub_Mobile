@@ -267,7 +267,7 @@ export function ResidentSupportScreen() {
           </View>
         ) : visibleTickets.length === 0 ? (
           <View style={styles.empty}>
-            <Ionicons name="life-buoy-outline" size={22} color="#9CA3AF" />
+            <Ionicons name="help-buoy-outline" size={22} color="#9CA3AF" />
             <Text style={styles.emptyTitle}>
               {statusFilter === "open" ? "No open requests" : "No support requests yet"}
             </Text>

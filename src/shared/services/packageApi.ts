@@ -368,9 +368,32 @@ export async function getResidentPackageDetail(
   const damage = damageFields(row);
   const packageRow = objectOf(row, "package", "Package", "data", "Data", "result", "Result") ?? row;
   const collector = objectOf(row, "authorizedCollector", "AuthorizedCollector");
+  const yourReturn = objectOf(row, "yourReturnRequest", "YourReturnRequest");
+  const mapped = toHubPackage(packageRow);
   return {
-    ...toHubPackage(packageRow),
+    ...mapped,
     ...damage,
+    returnStatus:
+      (yourReturn ? textOf(yourReturn, "status", "Status") : "") ||
+      mapped.returnStatus ||
+      undefined,
+    returnReason:
+      (yourReturn ? textOf(yourReturn, "reason", "Reason") : "") ||
+      mapped.returnReason ||
+      undefined,
+    returnNote:
+      (yourReturn ? textOf(yourReturn, "note", "Note") : "") ||
+      mapped.returnNote ||
+      undefined,
+    returnRequestedAt:
+      (yourReturn ? textOf(yourReturn, "requestedAtUtc", "RequestedAtUtc") : "") ||
+      mapped.returnRequestedAt ||
+      undefined,
+    // Prefer nested return status for lifecycle when the package envelope is stale.
+    status:
+      (yourReturn ? textOf(yourReturn, "status", "Status") : "") ||
+      mapped.status ||
+      undefined,
     authorizedCollectorId: collector
       ? textOf(collector, "id", "Id") || undefined
       : undefined,

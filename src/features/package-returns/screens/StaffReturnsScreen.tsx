@@ -15,17 +15,13 @@ import { useFocusEffect } from "@react-navigation/native";
 import { getStaffSession } from "@/features/authentication/services/sessionStorage";
 import type { StaffPackageReturn } from "@/features/package-returns/models/packageReturn.types";
 import { getSocietyPackageReturns } from "@/features/package-returns/services/packageReturnApi";
+import { formatPackageReturnReason } from "@/features/package-returns/utils/returnReasonLabels";
 import { API, authTokenHeader } from "@/shared/services/apiClient";
 import { colors } from "@/shared/theme/colors";
 import { formatDisplayTimestamp } from "@/shared/utils/formatDisplayTimestamp";
 
 function statusOf(request: StaffPackageReturn): string {
   return request.status.replace(/^Return/, "").replace(/([a-z])([A-Z])/g, "$1 $2") || "Requested";
-}
-
-function reasonLabel(reason: string): string {
-  if (!reason) return "Reason unavailable";
-  return reason.replace(/([a-z])([A-Z])/g, "$1 $2");
 }
 
 export function StaffReturnsScreen({ embedded = false }: { embedded?: boolean }) {
@@ -98,7 +94,7 @@ export function StaffReturnsScreen({ embedded = false }: { embedded?: boolean })
               <Text style={styles.sectionTitle}>Reason</Text>
               <Text style={styles.statusBadge}>{statusOf(selected)}</Text>
             </View>
-            <Text style={styles.reason}>{reasonLabel(selected.reason)}</Text>
+            <Text style={styles.reason}>{formatPackageReturnReason(selected.reason)}</Text>
             {selected.note ? <Text style={styles.note}>{selected.note}</Text> : null}
           </View>
           <Text style={styles.sectionLabel}>RESIDENT PHOTOS</Text>
@@ -187,7 +183,7 @@ export function StaffReturnsScreen({ embedded = false }: { embedded?: boolean })
                 </View>
                 <Text style={styles.statusBadge}>{statusOf(item)}</Text>
               </View>
-              <Text style={styles.reasonLine} numberOfLines={1}>{reasonLabel(item.reason)}</Text>
+              <Text style={styles.reasonLine} numberOfLines={1}>{formatPackageReturnReason(item.reason)}</Text>
               <View style={styles.cardFoot}>
                 <Text style={styles.requested}>{item.requestedAtUtc ? `Requested ${formatDisplayTimestamp(item.requestedAtUtc)}` : "Request time unavailable"}</Text>
                 <Ionicons name="chevron-forward" size={17} color="#9CA3AF" />

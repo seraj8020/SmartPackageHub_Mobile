@@ -16,6 +16,7 @@ import type { ResidentStackParamList } from "@/app/navigation/types";
 import { getResidentSession } from "@/features/authentication/services/sessionStorage";
 import { RequestReturnPanel } from "@/features/package-returns/components/RequestReturnPanel";
 import { getReturnRequestEligibility, isDeliveredLifecycleStatus } from "@/features/package-returns/utils/residentReturnEligibility";
+import { formatPackageReturnReason } from "@/features/package-returns/utils/returnReasonLabels";
 import {
   arrivalPhotoRequestHeaders,
   damagePhotoRequestHeaders,
@@ -25,6 +26,7 @@ import {
   type ResidentPackageDetail,
 } from "@/shared/services/packageApi";
 import { colors } from "@/shared/theme/colors";
+import { formatDisplayTimestamp } from "@/shared/utils/formatDisplayTimestamp";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type Props = NativeStackScreenProps<ResidentStackParamList, "PackageDetail">;
@@ -174,11 +176,14 @@ export function ResidentPackageDetailScreen({ route }: Props) {
   const hasCollector = Boolean(current.authorizedCollectorName);
   const returnEligibility = getReturnRequestEligibility({
     status: current.status,
+    returnStatus: current.returnStatus,
     deliveredAt: current.deliveredAt,
     treatBlankAsDelivered: false,
   });
   const isDeliveredLifecycle =
     isDeliveredLifecycleStatus(current.status);
+  const showStoredReturn =
+    returnEligibility.alreadyRequested || Boolean(current.returnReason);
 
   return (
     <View style={styles.root}>
@@ -239,7 +244,27 @@ export function ResidentPackageDetailScreen({ route }: Props) {
           </View>
         ) : null}
 
-        {!loading && isDeliveredLifecycle ? (
+        {!loading && showStoredReturn ? (
+          <View style={styles.returnSummary}>
+            <Text style={styles.sectionTitle}>Your return request</Text>
+            <View style={styles.card}>
+              <Text style={styles.returnReason}>
+                {formatPackageReturnReason(current.returnReason)}
+              </Text>
+              {current.returnNote ? <Text style={styles.note}>{current.returnNote}</Text> : null}
+              {current.returnRequestedAt ? (
+                <Text style={styles.returnMeta}>
+                  Requested {formatDisplayTimestamp(current.returnRequestedAt)}
+                </Text>
+              ) : null}
+              {current.returnStatus ? (
+                <Text style={styles.returnMeta}>Status · {current.returnStatus}</Text>
+              ) : null}
+            </View>
+          </View>
+        ) : null}
+
+        {!loading && isDeliveredLifecycle && !showStoredReturn ? (
           <RequestReturnPanel
             eligibility={returnEligibility}
             onRequest={() =>
@@ -344,6 +369,7 @@ const styles = StyleSheet.create({
   loading: { marginTop: 20 },
   damageSection: { marginTop: 16 },
   collectorSummary: { marginTop: 16 },
+  returnSummary: { marginTop: 16 },
   sectionTitle: {
     marginHorizontal: 16,
     marginBottom: 1,
@@ -354,6 +380,8 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   collectorActive: { color: "#166534", fontSize: 13, fontWeight: "700" },
+  returnReason: { color: colors.text, fontSize: 13, fontWeight: "700" },
+  returnMeta: { color: colors.textMuted, fontSize: 11, marginTop: 6 },
   photo: { width: "100%", height: 220, borderRadius: 10, backgroundColor: "#E7EBEF", marginBottom: 8 },
   placeholder: { alignItems: "center", justifyContent: "center", padding: 6 },
   placeholderText: { color: "#697586", fontSize: 9, textAlign: "center", marginTop: 2 },
