@@ -46,6 +46,10 @@ export interface HubPackage {
   shelfCapacity?: number;
   isColdStorage?: boolean;
   status?: PackageLifecycleStatus;
+  returnStatus?: string;
+  returnReason?: string;
+  returnNote?: string;
+  returnRequestedAt?: string;
   isCod?: boolean;
   codAmount?: number;
   codApprovalStatus?: CodApprovalStatus;
@@ -244,6 +248,10 @@ export function toHubPackage(row: Record<string, unknown>): HubPackage {
     shelfCapacity: Number(row.shelfCapacity ?? row.ShelfCapacity) || undefined,
     isColdStorage: row.isColdStorage === true || row.IsColdStorage === true,
     status: textOf(row, "status", "Status") || undefined,
+    returnStatus: textOf(row, "returnStatus", "ReturnStatus") || undefined,
+    returnReason: textOf(row, "returnReason", "ReturnReason", "reason", "Reason") || undefined,
+    returnNote: textOf(row, "returnNote", "ReturnNote", "returnRequestNote", "ReturnRequestNote") || undefined,
+    returnRequestedAt: textOf(row, "returnRequestedAt", "ReturnRequestedAt", "requestedAt", "RequestedAt") || undefined,
     isCod: typeof isCodRaw === "boolean" ? isCodRaw : undefined,
     codAmount:
       typeof codAmountRaw === "number" ? codAmountRaw : Number(codAmountRaw) || undefined,

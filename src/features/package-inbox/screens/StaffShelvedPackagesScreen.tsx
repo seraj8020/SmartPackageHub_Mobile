@@ -12,6 +12,8 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import type { StaffStackParamList } from "@/app/navigation/types";
 import { resetToRoot } from "@/app/navigation/navigationHelpers";
 import type { StaffSessionState } from "@/features/authentication/models/auth.types";
 import {
@@ -31,8 +33,9 @@ import {
 import { tokenStorage } from "@/shared/services/tokenStorage";
 import { colors } from "@/shared/theme/colors";
 import { formatUnitLabel } from "@/shared/utils/formatUnitLabel";
+import { StaffReturnsScreen } from "@/features/package-returns/screens/StaffReturnsScreen";
 
-export function StaffShelvedPackagesScreen() {
+export function StaffShelvedPackagesScreen({ route }: NativeStackScreenProps<StaffStackParamList, "Shelf">) {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const [session, setSession] = useState<StaffSessionState | null>(null);
@@ -79,6 +82,7 @@ export function StaffShelvedPackagesScreen() {
   return (
     <StaffShelvedBody
       societyId={societyId}
+      initialSection={route.params?.section ?? "intake"}
       societyName={societyName}
       username={session.username}
       topInset={insets.top}
@@ -100,6 +104,7 @@ export function StaffShelvedPackagesScreen() {
 
 function StaffShelvedBody({
   societyId,
+  initialSection,
   societyName,
   username,
   topInset,
@@ -107,12 +112,14 @@ function StaffShelvedBody({
   onSignOut,
 }: {
   societyId: string;
+  initialSection: "intake" | "returns";
   societyName: string;
   username: string;
   topInset: number;
   sideInset: number;
   onSignOut: () => Promise<void>;
 }) {
+  const [section, setSection] = useState<"intake" | "returns">(initialSection);
   const {
     hubPackages,
     packageLoadError,
@@ -130,6 +137,8 @@ function StaffShelvedBody({
       .then(setPhotoHeaders)
       .catch(() => undefined);
   }, []);
+
+  useEffect(() => setSection(initialSection), [initialSection]);
 
   const pending = hubPackages.filter(
     (pkg) =>
@@ -153,10 +162,20 @@ function StaffShelvedBody({
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Shelved Packages</Text>
         <Text style={styles.headerSub}>
-          Packages still on Shelf
+          Manage intake and resident returns
         </Text>
       </View>
 
+      <View style={styles.sectionTabs}>
+        <Pressable onPress={() => setSection("intake")} style={[styles.sectionTab, section === "intake" && styles.sectionTabActive]}>
+          <Text style={[styles.sectionTabText, section === "intake" && styles.sectionTabTextActive]}>Intake packages</Text>
+        </Pressable>
+        <Pressable onPress={() => setSection("returns")} style={[styles.sectionTab, section === "returns" && styles.sectionTabActive]}>
+          <Text style={[styles.sectionTabText, section === "returns" && styles.sectionTabTextActive]}>Return packages</Text>
+        </Pressable>
+      </View>
+
+      {section === "returns" ? <StaffReturnsScreen embedded /> : (
       <FlatList
         data={
           packageLoadError && pending.length === 0
@@ -302,11 +321,13 @@ function StaffShelvedBody({
                   </Pressable>
                 )}
               </View>
+              {pkg.damageNote ? <Text style={styles.hubNote}>Hub intake note · {pkg.damageNote}</Text> : null}
               {error ? <Text style={styles.itemError}>{error}</Text> : null}
             </View>
           );
         }}
       />
+      )}
     </View>
   );
 }
@@ -331,6 +352,11 @@ const styles = StyleSheet.create({
   },
   headerTitle: { color: "#fff", fontSize: 16, fontWeight: "800" },
   headerSub: { color: "rgba(255,255,255,0.5)", fontSize: 12, marginTop: 4 },
+  sectionTabs: { flexDirection: "row", backgroundColor: colors.surface, paddingHorizontal: 14, paddingVertical: 9, gap: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#D8E0E8" },
+  sectionTab: { flex: 1, alignItems: "center", paddingHorizontal: 8, paddingVertical: 9, borderRadius: 9, backgroundColor: "#F1F5F9" },
+  sectionTabActive: { backgroundColor: colors.primary },
+  sectionTabText: { color: "#64748B", fontSize: 11, fontWeight: "800" },
+  sectionTabTextActive: { color: "#fff" },
   list: { padding: 16, paddingBottom: 40 },
   searchBox: {
     minHeight: 44,
@@ -455,6 +481,7 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.55 },
   dispatchText: { color: "#fff", fontSize: 11, fontWeight: "800" },
   itemError: { marginTop: 8, fontSize: 12, color: colors.danger },
+  hubNote: { marginTop: 8, fontSize: 11, color: "#92400E", backgroundColor: "#FFFBEB", padding: 8, borderRadius: 8 },
   empty: {
     backgroundColor: colors.surface,
     borderRadius: 12,
