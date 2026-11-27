@@ -18,6 +18,25 @@ export type RequestPackageReturnResponse = {
   message?: string;
 };
 
+export type StaffPackageReturn = {
+  id: string;
+  packageId: string;
+  residentId: string;
+  societyId: string;
+  status: string;
+  reason: string;
+  note?: string;
+  requestedAtUtc?: string;
+  pkgNumber?: string;
+  courierPartner?: string;
+  courierAwb?: string;
+  residentName?: string;
+  unit?: string;
+  hasHubIntakeDamage: boolean;
+  hubIntakeDamageNote?: string;
+  photos: Array<{ id: string }>;
+};
+
 export type ReturnEligibilityInput = {
   status?: string | null;
   packageStatus?: string | null;

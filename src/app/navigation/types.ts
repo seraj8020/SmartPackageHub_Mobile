@@ -33,7 +33,7 @@ export type StaffStackParamList = {
   Home: undefined;
   Scan: undefined;
   Inbox: undefined;
-  Shelf: undefined;
+  Shelf: { section?: "intake" | "returns" } | undefined;
   Map: undefined;
   Route: undefined;
   Hand: undefined;
