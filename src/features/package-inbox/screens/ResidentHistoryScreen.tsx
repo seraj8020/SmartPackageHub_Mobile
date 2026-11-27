@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getResidentSession } from "@/features/authentication/services/sessionStorage";
 import { RequestReturnPanel } from "@/features/package-returns/components/RequestReturnPanel";
 import { getReturnRequestEligibility } from "@/features/package-returns/utils/residentReturnEligibility";
+import { formatPackageReturnReason } from "@/features/package-returns/utils/returnReasonLabels";
 import {
   getResidentHistory,
   type HistoryItem,
@@ -275,12 +276,25 @@ export function ResidentHistoryScreen() {
                       {trackingLine}
                     </Text>
                   ) : null}
+                  {item.isDamaged ? <Text style={styles.damageChip}>Damaged on arrival</Text> : null}
                   <Text style={styles.deliveryInfo}>
                     {formatDisplayTimestamp(item.collectedAt)}
                     {item.methodOfDelivery || item.method
                       ? ` · ${item.methodOfDelivery || item.method}`
                       : ""}
                   </Text>
+                  {eligibility.alreadyRequested && item.returnReason ? (
+                    <View style={styles.returnSummary}>
+                      <Text style={styles.returnReason}>
+                        {formatPackageReturnReason(item.returnReason)}
+                      </Text>
+                      {item.returnNote ? (
+                        <Text style={styles.returnNote} numberOfLines={2}>
+                          {item.returnNote}
+                        </Text>
+                      ) : null}
+                    </View>
+                  ) : null}
                   <RequestReturnPanel
                     compact
                     eligibility={eligibility}
@@ -416,6 +430,30 @@ const styles = StyleSheet.create({
     fontVariant: ["tabular-nums"],
   },
   deliveryInfo: { marginTop: 4, color: "#9CA3AF", fontSize: 11 },
+  damageChip: {
+    alignSelf: "flex-start",
+    marginTop: 7,
+    borderWidth: 1,
+    borderColor: "#FED7AA",
+    borderRadius: 6,
+    backgroundColor: "#FFF7ED",
+    color: "#B45309",
+    fontSize: 10,
+    fontWeight: "800",
+    overflow: "hidden",
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  returnSummary: {
+    marginTop: 8,
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#FECDD3",
+    backgroundColor: "#FFF1F2",
+  },
+  returnReason: { color: "#BE123C", fontSize: 12, fontWeight: "700" },
+  returnNote: { marginTop: 4, color: "#9F1239", fontSize: 11, lineHeight: 15 },
   requestedStatusIcon: { backgroundColor: "#FFF1F2" },
   empty: {
     alignItems: "center",

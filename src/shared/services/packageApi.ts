@@ -99,6 +99,11 @@ export interface HistoryItem {
   /** Package lifecycle: Delivered, ReturnRequested, … */
   packageStatus?: string;
   returnStatus?: string;
+  returnReason?: string;
+  returnNote?: string;
+  returnRequestedAt?: string;
+  /** Hub intake damage flag for history cards. */
+  isDamaged?: boolean;
 }
 
 export interface PackageStatusUpdateResponse {
@@ -503,6 +508,7 @@ export async function getResidentHistory(
       textOf(row, "packageStatus", "PackageStatus") ||
       (deliveryStatus && !/^completed$/i.test(deliveryStatus) ? deliveryStatus : "Delivered");
     const returnStatus = textOf(row, "returnStatus", "ReturnStatus") || undefined;
+    const returnReason = textOf(row, "returnReason", "ReturnReason") || undefined;
     return {
       id: textOf(row, "id", "Id") || textOf(row, "packageId", "PackageId"),
       packageId: textOf(row, "packageId", "PackageId") || textOf(row, "id", "Id"),
@@ -517,6 +523,12 @@ export async function getResidentHistory(
       returnStatus:
         returnStatus ||
         (/^returnrequested$/i.test(packageStatus) ? "ReturnRequested" : undefined),
+      returnReason,
+      returnNote: textOf(row, "returnNote", "ReturnNote") || undefined,
+      returnRequestedAt:
+        textOf(row, "returnRequestedAtUtc", "ReturnRequestedAtUtc", "returnRequestedAt", "ReturnRequestedAt") ||
+        undefined,
+      isDamaged: row.isDamaged === true || row.IsDamaged === true,
       trackingNumber: textOf(row, "trackingNumber", "TrackingNumber") || undefined,
       courierAwb: textOf(row, "courierAwb", "CourierAwb", "awb", "Awb") || undefined,
       methodOfDelivery: method || undefined,
