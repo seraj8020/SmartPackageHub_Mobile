@@ -1,6 +1,13 @@
 # QA CI for SmartPackageHub Mobile — runs on QA only (not Development).
-# Feature work merges into Development; promote to QA to run CI + EAS publish.
-# On QA push, triggers an Android APK build on Expo (https://expo.dev) via EAS.
+#
+# Two APK backends (keep both):
+#   - gradle (default for now): builds APK on GitHub Actions — does NOT use Expo build quota
+#   - eas: original Expo cloud pipeline (https://expo.dev) when quota is available again
+#
+# Switch back to Expo after quota resets (e.g. Dec):
+#   - Actions → QA Mobile → Run workflow → builder = eas
+#   - or set repo variable MOBILE_QA_BUILDER=eas
+#   - or push with default after changing default below back to eas
 name: QA Mobile
 
 on:
@@ -9,14 +16,26 @@ on:
   pull_request:
     branches: [QA]
   workflow_dispatch:
+    inputs:
+      builder:
+        description: "APK builder (gradle = GitHub Actions; eas = Expo cloud)"
+        type: choice
+        options:
+          - gradle
+          - eas
+        default: gradle
 
 concurrency:
   group: qa-mobile-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # Prefer workflow_dispatch choice, then repo variable, else gradle (quota workaround).
+  QA_BUILDER: ${{ github.event.inputs.builder || vars.MOBILE_QA_BUILDER || 'gradle' }}
+  EXPO_PUBLIC_API_BASE_URL: http://34.47.185.139:5000
+
 jobs:
-  build:
-    # Safety: never run from Development even if workflow_dispatch selects it.
+  typecheck:
     if: >
       github.event_name == 'pull_request' ||
       github.ref == 'refs/heads/QA'
@@ -26,7 +45,6 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          # EAS CLI latest requires Node >= 22
           node-version: "22"
           cache: npm
 
@@ -36,12 +54,77 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
-      # Publish Android QA APK to Expo Build (shows under the project on expo.dev).
-      # Requires repo secret EXPO_TOKEN (Expo personal access token).
+  # Alternative while Expo EAS monthly build limit is exhausted.
+  apk-gradle:
+    needs: typecheck
+    if: >
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      github.ref == 'refs/heads/QA' &&
+      (github.event.inputs.builder || vars.MOBILE_QA_BUILDER || 'gradle') == 'gradle'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install JS deps
+        run: npm ci
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;27.1.12297006" "cmake;3.22.1"
+          yes | sdkmanager --licenses >/dev/null || true
+
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
+
+      - name: Build QA APK (assembleRelease)
+        working-directory: android
+        env:
+          EXPO_PUBLIC_API_BASE_URL: ${{ env.EXPO_PUBLIC_API_BASE_URL }}
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sph-qa-android-apk
+          path: |
+            android/app/build/outputs/apk/release/*.apk
+            android/app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  # Original Expo.dev EAS cloud pipeline (kept for when quota is available again).
+  apk-eas:
+    needs: typecheck
+    if: >
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      github.ref == 'refs/heads/QA' &&
+      (github.event.inputs.builder || vars.MOBILE_QA_BUILDER || 'gradle') == 'eas'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
       - name: Setup Expo / EAS
-        if: >
-          (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-          github.ref == 'refs/heads/QA'
         uses: expo/expo-github-action@v8
         with:
           eas-version: latest
@@ -49,9 +132,6 @@ jobs:
           packager: npm
 
       - name: EAS build (QA profile, Android APK)
-        if: >
-          (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-          github.ref == 'refs/heads/QA'
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
