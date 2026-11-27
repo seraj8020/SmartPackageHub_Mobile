@@ -89,6 +89,12 @@ jobs:
           yes | sdkmanager --licenses >/dev/null || true
           sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.1.12297006" "cmake;3.22.1"
 
+      # /android is gitignored (Expo managed); generate native project on CI before Gradle.
+      - name: Expo prebuild (android)
+        env:
+          EXPO_PUBLIC_API_BASE_URL: ${{ env.EXPO_PUBLIC_API_BASE_URL }}
+        run: npx expo prebuild --platform android --no-install
+
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
